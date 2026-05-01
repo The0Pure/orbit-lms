@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { -webkit-font-smoothing: antialiased; }
+  html { scroll-behavior: smooth; }
+  body { @apply font-body bg-orbit-bg text-orbit-navy; }
+  ::selection { background: rgba(184,150,90,0.2); }
+  input:focus, textarea:focus, select:focus {
+    @apply outline-none ring-2 ring-orbit-gold/30 border-orbit-gold;
+  }
+}
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(45,51,71,0.15); border-radius: 99px; }
+
+@layer components {
+  .orbit-container { @apply max-w-[1200px] mx-auto px-4 sm:px-6; }
+  .orbit-card { @apply bg-white rounded-2xl border border-orbit-cream-light shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5; }
+  .btn-primary { @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-orbit-gold text-white rounded-xl font-semibold text-sm transition-all duration-200 hover:bg-orbit-gold-dark active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed; }
+  .btn-navy { @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-orbit-navy text-orbit-cream rounded-xl font-semibold text-sm transition-all duration-200 hover:bg-orbit-navy-light active:scale-95; }
+  .btn-outline { @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-transparent text-orbit-navy rounded-xl font-semibold text-sm border-[1.5px] border-orbit-cream-light transition-all duration-200 hover:border-orbit-navy/30 active:scale-95; }
+  .orbit-input { @apply w-full px-4 py-3 border-[1.5px] border-orbit-cream-light rounded-xl text-sm text-orbit-navy bg-orbit-bg placeholder:text-gray-400 transition-colors duration-200; }
+  .orbit-label { @apply block text-sm font-semibold text-orbit-navy mb-2; }
+  .page-title { @apply font-display text-3xl sm:text-4xl font-bold text-orbit-navy tracking-tight; }
+  .section-title { @apply font-display text-2xl sm:text-3xl font-bold text-orbit-navy tracking-tight; }
+}
+
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+/* Apple Pay button */
+apple-pay-button { --apple-pay-button-width: 100%; --apple-pay-button-height: 48px; --apple-pay-button-border-radius: 12px; --apple-pay-button-padding: 10px 0px; }
+
+/* Certificate print styles */
+@media print {
+  body * { visibility: hidden; }
+  #certificate, #certificate * { visibility: visible; }
+  #certificate { position: absolute; left: 0; top: 0; width: 100%; }
+}
