@@ -411,7 +411,7 @@ export default function App() {
 
     if (provider === "google") {
       const clientId = cfg.googleClientId;
-      if (!clientId) { alert("Google Client ID not configured.\nGo to Admin → Settings → Social Login to add it."); return; }
+      if (!clientId) { alert("Google Client ID not configured.\n"); return; }
       const params = new URLSearchParams({
         client_id:     clientId,
         redirect_uri:  window.location.origin,
