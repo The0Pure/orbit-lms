@@ -453,7 +453,7 @@ export default function App() {
 
     if (provider === "x") {
       const clientId = cfg.xClientId;
-      if (!clientId) { alert("X (Twitter) Client ID not configured.\nGo to Admin → Settings → Social Login to add it."); return; }
+      if (!clientId) { alert("X (Twitter) Client ID not configured.\n"); return; }
       const params = new URLSearchParams({
         response_type:         "code",
         client_id:             clientId,
@@ -470,7 +470,7 @@ export default function App() {
 
     if (provider === "linkedin") {
       const clientId = cfg.linkedinClientId;
-      if (!clientId) { alert("LinkedIn Client ID not configured.\nGo to Admin → Settings → Social Login to add it."); return; }
+      if (!clientId) { alert("LinkedIn Client ID not configured.\n"); return; }
       const params = new URLSearchParams({
         response_type: "code",
         client_id:     clientId,
