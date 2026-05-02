@@ -1716,25 +1716,16 @@ function LoginPage({ nav, login, t, isRTL, onSocial }) {
             <div style={{padding:28}}>
               {forgotSent ? (
                 <div style={{textAlign:"center",padding:"16px 0"}}>
-                  <div style={{fontSize:40,marginBottom:16}}>🔐</div>
-                  <h3 style={{fontSize:17,fontWeight:700,color:C.navy,marginBottom:10}}>
-                    {isRTL?"تم إعادة تعيين كلمة المرور":"Password Reset Done"}
+                  <div style={{fontSize:48,marginBottom:16}}>📧</div>
+                  <h3 style={{fontSize:18,fontWeight:700,color:C.navy,marginBottom:12}}>
+                    {isRTL?"تم إرسال كلمة المرور":"Password Sent"}
                   </h3>
-                  <p style={{fontSize:14,color:"#6B7280",lineHeight:1.8,marginBottom:20}}>
+                  <p style={{fontSize:15,color:"#6B7280",lineHeight:1.9,marginBottom:24}}>
                     {isRTL
-                      ? "إذا كان هذا البريد الإلكتروني مسجّلاً لدينا، ستجد أدناه كلمة مرور مؤقتة. سجّل الدخول بها ثم غيّرها من إعدادات حسابك."
-                      : "If this email is registered with us, your temporary password is shown below. Use it to sign in, then change it from your account settings."}
+                      ? "سيتم إرسال كلمة المرور الجديدة إلى بريدك الإلكتروني."
+                      : "You will receive your new password in your email."}
                   </p>
-                  {tempPwShown && (
-                    <div style={{background:C.bg,border:`1.5px solid ${C.gold}`,borderRadius:12,padding:"14px 20px",marginBottom:20}}>
-                      <p style={{fontSize:12,color:"#9CA3AF",marginBottom:6}}>{isRTL?"كلمة المرور المؤقتة:":"Temporary Password:"}</p>
-                      <p style={{fontSize:18,fontWeight:700,color:C.navy,letterSpacing:2,fontFamily:"monospace"}}>{tempPwShown}</p>
-                      <button onClick={()=>navigator.clipboard?.writeText(tempPwShown)} style={{fontSize:12,color:C.teal,fontWeight:600,marginTop:6}}>
-                        {isRTL?"نسخ":"Copy"}
-                      </button>
-                    </div>
-                  )}
-                  <button onClick={()=>setShowForgot(false)} style={{...S.btnPrimary,margin:"0 auto",padding:"10px 28px",fontSize:14}}>
+                  <button onClick={()=>setShowForgot(false)} style={{...S.btnPrimary,margin:"0 auto",padding:"12px 32px",fontSize:15}}>
                     {isRTL?"العودة لتسجيل الدخول":"Back to Sign In"}
                   </button>
                 </div>
