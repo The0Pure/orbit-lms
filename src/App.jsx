@@ -348,6 +348,7 @@ export default function App() {
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [catFilter,  setCatFilter]  = useState("All");
   const [lang,       setLang]       = useState(()=>ls("orb_lang","en"));
+  const [siteName,   setSiteNameApp] = useState(()=>ls("orb_siteName","Orbit Learning Platform"));
 
   const t   = T[lang] || T.en;
   const isRTL = lang === "ar";
@@ -593,7 +594,7 @@ export default function App() {
         <nav style={S.nav}>
           <div style={S.navIn}>
             <button onClick={()=>nav("home")} style={S.logoBtn}>
-              <OrbitLogo size={32}/><span style={S.logoTxt}>{ls("orb_siteName","Orbit").split(" ")[0]}</span>
+              <OrbitLogo size={32}/><span style={S.logoTxt}>{siteName.split(" ")[0]}</span>
             </button>
             <div className="d-nav">
               {[["home",t.nav.home],["courses",t.nav.courses]].map(([pg,label])=>(
@@ -652,7 +653,7 @@ export default function App() {
         {page==="help"        && <HelpPage nav={nav} t={t}/>}
         {page==="privacy"     && <PrivacyPage nav={nav} t={t}/>}
         {page==="terms"       && <TermsPage nav={nav} t={t}/>}
-        {page==="admin" && isAdmin && <AdminLayout user={user} logout={logout} sec={adminSec} setSec={setAdminSec} courses={courses} orders={orders} users={users} addCourse={addCourse} updateCourse={updateCourse} deleteCourse={deleteCourse} addUserAdmin={addUserAdmin} updateUser={updateUser} deleteUser={deleteUser} nav={nav} selCourse={selCourse} setSelCourse={setSelCourse} t={t}/>}
+        {page==="admin" && isAdmin && <AdminLayout user={user} logout={logout} sec={adminSec} setSec={setAdminSec} courses={courses} orders={orders} users={users} addCourse={addCourse} updateCourse={updateCourse} deleteCourse={deleteCourse} addUserAdmin={addUserAdmin} updateUser={updateUser} deleteUser={deleteUser} nav={nav} selCourse={selCourse} setSelCourse={setSelCourse} t={t} onSiteNameChange={setSiteNameApp}/>}
       </main>
 
       {/* ── PAYMENT MODAL ── */}
@@ -2052,7 +2053,7 @@ function TermsPage({ nav, t }) {
 // ═══════════════════════════════════════════
 // ADMIN LAYOUT
 // ═══════════════════════════════════════════
-function AdminLayout({ user, logout, sec, setSec, courses, orders, users, addCourse, updateCourse, deleteCourse, addUserAdmin, updateUser, deleteUser, nav, selCourse, setSelCourse }) {
+function AdminLayout({ user, logout, sec, setSec, courses, orders, users, addCourse, updateCourse, deleteCourse, addUserAdmin, updateUser, deleteUser, nav, selCourse, setSelCourse, onSiteNameChange }) {
   const menuItems = [
     {id:"overview",  icon:<I.Grid/>,    l:"Overview"},
     {id:"courses",   icon:<I.Book/>,    l:"Courses"},
@@ -2083,7 +2084,7 @@ function AdminLayout({ user, logout, sec, setSec, courses, orders, users, addCou
       {sec==="users"       && <AdminUsers users={users} addUserAdmin={addUserAdmin} updateUser={updateUser} deleteUser={deleteUser}/>}
       {sec==="careers"     && <AdminCareers/>}
       {sec==="revenue"     && <AdminRevenue orders={orders}/>}
-      {sec==="settings"    && <AdminSettings/>}
+      {sec==="settings"    && <AdminSettings onSiteNameChange={onSiteNameChange}/>}
     </main>
   </div>
   );
@@ -2906,7 +2907,7 @@ function AdminRevenue({ orders }) {
 // ═══════════════════════════════════════════
 // ADMIN SETTINGS
 // ═══════════════════════════════════════════
-function AdminSettings() {
+function AdminSettings({ onSiteNameChange }) {
   const [siteName,  setSiteName]  = useState(()=>ls("orb_siteName","Orbit Learning Platform"));
   const [vat,       setVat]       = useState(()=>ls("orb_vat","15"));
   const [amazonId,  setAmazonId]  = useState(()=>ls("orb_amazonId",""));
@@ -2925,6 +2926,7 @@ function AdminSettings() {
     ss("orb_amazonId", amazonId);
     ss("orb_oauth", oauth);
     document.title = siteName;
+    onSiteNameChange?.(siteName);   // ← triggers navbar re-render immediately
     setSaved(true);
     setTimeout(()=>setSaved(false),2500);
   };
