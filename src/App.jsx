@@ -1938,8 +1938,8 @@ function HelpPage({ nav, t }) {
     {q:"Do courses expire?",                   a:"No. Once enrolled, you have lifetime access to the course content including any future updates."},
   ];
   const contacts = isRTL
-    ? [{icon:"✉️",l:"البريد الإلكتروني",v:"support@orbit.sa"},{icon:"💬",l:"الدردشة المباشرة",v:"متاح داخل التطبيق"}]
-    : [{icon:"✉️",l:"Email",v:"support@orbit.sa"},{icon:"💬",l:"Live Chat",v:"Available in-app"}];
+    ? [{icon:"✉️",l:"البريد الإلكتروني",v:" linkybinky9@gmail.com"},{icon:"💬",l:"الدردشة المباشرة",v:"متاح داخل التطبيق"}]
+    : [{icon:"✉️",l:"Email",v:" linkybinky9@gmail.com"},{icon:"💬",l:"Live Chat",v:"Available in-app"}];
   return (
     <StaticPage title={isRTL?"مركز المساعدة":"Help Center"} isRTL={isRTL}>
       <div style={{background:"#fff",borderRadius:20,padding:40,border:"1px solid rgba(45,51,71,0.07)",marginBottom:32}}>
@@ -1989,14 +1989,14 @@ function PrivacyPage({ nav, t }) {
     {h:"كيف نستخدم معلوماتك",           b:"تُستخدم بياناتك لتقديم خدماتنا، ومعالجة المدفوعات، وإرسال تحديثات الكورسات، وتحسين تجربة المنصة."},
     {h:"مشاركة البيانات",               b:"لا نبيع بياناتك الشخصية. نشارك البيانات فقط مع معالجي الدفع ومزودي الخدمات اللازمين لتقديم خدماتنا."},
     {h:"الاحتفاظ بالبيانات",            b:"نحتفظ ببياناتك طالما حسابك نشط. يمكنك طلب الحذف في أي وقت عبر التواصل مع الدعم."},
-    {h:"حقوقك",                         b:"لديك الحق في الوصول إلى بياناتك الشخصية وتصحيحها أو حذفها. تواصل معنا على support@orbit.sa لأي طلبات."},
+    {h:"حقوقك",                         b:"لديك الحق في الوصول إلى بياناتك الشخصية وتصحيحها أو حذفها. تواصل معنا على  linkybinky9@gmail.com لأي طلبات."},
     {h:"الأمان",                         b:"نستخدم تشفير SSL بقوة 256 بت ونتبع أفضل ممارسات الصناعة لحماية معلوماتك."},
   ] : [
     {h:"Information We Collect",        b:"We collect information you provide directly (name, email, payment info) and usage data to improve our platform."},
     {h:"How We Use Your Information",   b:"Your data is used to provide our services, process payments, send course updates, and improve the platform experience."},
     {h:"Data Sharing",                  b:"We do not sell your personal data. We share data only with payment processors and service providers necessary to deliver our services."},
     {h:"Data Retention",                b:"We retain your data as long as your account is active. You may request deletion at any time by contacting support."},
-    {h:"Your Rights",                   b:"You have the right to access, correct, or delete your personal data. Contact support@orbit.sa for any data requests."},
+    {h:"Your Rights",                   b:"You have the right to access, correct, or delete your personal data. Contact  linkybinky9@gmail.com for any data requests."},
     {h:"Security",                      b:"We use 256-bit SSL encryption and follow industry best practices to protect your information."},
   ];
   return (
@@ -3135,12 +3135,12 @@ function ChatbotWidget({ isRTL }) {
     "كيف أسجّل": "تصفح الكورسات، اختر الكورس المناسب، ثم اضغط 'اشترك الآن' واتبع خطوات الدفع الآمن.",
     "الدفع": "نقبل البطاقات الائتمانية، Apple Pay، STC Pay، وAmazon Pay. جميع الأسعار تشمل ضريبة القيمة المضافة 15%.",
     "استرداد": "نقدم ضمان استرداد كامل خلال 7 أيام من الشراء دون أي شروط.",
-    "دعم": "يمكنك التواصل مع فريقنا على support@orbit.sa — الأحد إلى الخميس، 9ص–6م.",
+    "دعم": "يمكنك التواصل مع فريقنا على  linkybinky9@gmail.com — الأحد إلى الخميس، 9ص–6م.",
   } : {
     "enroll": "Browse courses, choose the right one, then click 'Enroll Now' and follow the secure payment steps.",
     "payment": "We accept credit cards, Apple Pay, STC Pay, and Amazon Pay. All prices include 15% VAT.",
     "refund": "We offer a full 7-day money-back guarantee, no questions asked.",
-    "support": "You can reach our team at support@orbit.sa — Sunday to Thursday, 9am–6pm.",
+    "support": "You can reach our team at  linkybinky9@gmail.com — Sunday to Thursday, 9am–6pm.",
   };
 
   const sendMsg = (text) => {
@@ -3151,7 +3151,7 @@ function ChatbotWidget({ isRTL }) {
     setTyping(true);
     setTimeout(()=>{
       const lower = text.toLowerCase();
-      let reply = isRTL ? "شكراً لرسالتك! سيتواصل معك فريق الدعم قريباً على support@orbit.sa" : "Thanks for your message! Our support team will reach you soon at support@orbit.sa";
+      let reply = isRTL ? "شكراً لرسالتك! سيتواصل معك فريق الدعم قريباً على  linkybinky9@gmail.com" : "Thanks for your message! Our support team will reach you soon at  linkybinky9@gmail.com";
       for (const [key, val] of Object.entries(autoReplies)) {
         if (lower.includes(key)) { reply = val; break; }
       }
