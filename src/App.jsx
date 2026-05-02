@@ -172,11 +172,11 @@ const CAT_AR = {
   "Project Management":"إدارة المشاريع","Client Communication":"التواصل مع العملاء",
   "Sustainability":"الاستدامة في التصميم",
   "Design":"التصميم","Development":"التطوير","Data":"البيانات","Cloud":"الحوسبة السحابية",
-  "Security":"الأمن","Mobile":"تطوير الجوال","Business":"الأعمال","Marketing":"التسويق",
+  "  ":"الأمن","Mobile":"تطوير الجوال","Business":"الأعمال","Marketing":"التسويق",
 };
 const LEVEL_AR = { Beginner:"مبتدئ", Intermediate:"متوسط", Advanced:"متقدم" };
 // ═══════════════════════════════════════════
-// SECURITY — admin auth (hash-based, no plaintext in UI)
+//    — admin auth (hash-based, no plaintext in UI)
 // In production: move to server-side auth (Supabase, Firebase, etc.)
 // ═══════════════════════════════════════════
 // ═══════════════════════════════════════════
@@ -1835,20 +1835,20 @@ function HelpPage({ nav, t }) {
   const isRTL = t?.dir === "rtl";
   const faqs = isRTL ? [
     {q:"كيف أسجّل في كورس؟",                  a:"تصفح الكورسات، اضغط على أي كورس، ثم اضغط 'اشترك الآن'. سيرشدك النظام خلال عملية الدفع الآمنة."},
-    {q:"ما وسائل الدفع المقبولة؟",              a:"نقبل البطاقات الائتمانية، Apple Pay، وSTC Pay. جميع الأسعار تشمل ضريبة القيمة المضافة 15% وفق لوائح المملكة."},
+    {q:"ما وسائل الدفع المقبولة؟",              a:"نقبل البطاقات الائتمانية، Apple Pay، و . جميع الأسعار تشمل ضريبة القيمة المضافة 15% وفق لوائح المملكة."},
     {q:"هل يمكنني استرداد المبلغ؟",             a:"نقدم ضمان استرداد كامل خلال 7 أيام من الشراء. تواصل مع الدعم خلال 7 أيام إذا لم تكن راضياً."},
     {q:"كيف أصل إلى كورساتي؟",                 a:"بعد الاشتراك، انتقل إلى لوحتك واضغط على 'كمّل التعلم' في أي كورس مسجّل."},
     {q:"هل تنتهي صلاحية الكورسات؟",            a:"لا. بمجرد اشتراكك، تحصل على وصول مدى الحياة لمحتوى الكورس بما يشمل أي تحديثات مستقبلية."},
   ] : [
     {q:"How do I enroll in a course?",         a:"Browse courses, click on any course, then click 'Enroll Now'. You'll be guided through a secure payment process."},
-    {q:"What payment methods are accepted?",   a:"We accept Credit/Debit cards, Apple Pay, and STC Pay. All prices include 15% VAT as required by Saudi regulations."},
+    {q:"What payment methods are accepted?",   a:"We accept Credit/Debit cards, Apple Pay, and  . All prices include 15% VAT as required by Saudi regulations."},
     {q:"Can I get a refund?",                  a:"We offer a 7-day money-back guarantee for all courses. Contact support within 7 days of purchase if you're not satisfied."},
     {q:"How do I access my courses?",          a:"After enrollment, go to your Dashboard and click 'Continue Learning' on any enrolled course."},
     {q:"Do courses expire?",                   a:"No. Once enrolled, you have lifetime access to the course content including any future updates."},
   ];
   const contacts = isRTL
-    ? [{icon:"✉️",l:"البريد الإلكتروني",v:"support@orbit.sa"},{icon:"💬",l:"الدردشة المباشرة",v:"متاح داخل التطبيق"}]
-    : [{icon:"✉️",l:"Email",v:"support@orbit.sa"},{icon:"💬",l:"Live Chat",v:"Available in-app"}];
+    ? [{icon:"✉️",l:"البريد الإلكتروني",v:"linkybinky9@gmail.com"},{icon:"💬",l:"الدردشة المباشرة",v:"متاح داخل التطبيق"}]
+    : [{icon:"✉️",l:"Email",v:"linkybinky9@gmail.com"},{icon:"💬",l:"Live Chat",v:"Available in-app"}];
   return (
     <StaticPage title={isRTL?"مركز المساعدة":"Help Center"} isRTL={isRTL}>
       <div style={{background:"#fff",borderRadius:20,padding:40,border:"1px solid rgba(45,51,71,0.07)",marginBottom:32}}>
@@ -1894,19 +1894,18 @@ function FaqItem({ q, a, isRTL }) {
 function PrivacyPage({ nav, t }) {
   const isRTL = t?.dir === "rtl";
   const sections = isRTL ? [
-    {h:"المعلومات التي نجمعها",         b:"نجمع المعلومات التي تقدمها مباشرةً (الاسم، البريد الإلكتروني، معلومات الدفع) وبيانات الاستخدام لتحسين منصتنا."},
+    {h:"المعلومات التي نجمعها",         b:"نجمع المعلومات التي تقدمها مباشرةً (الاسم، البريد الإلكتروني) وبيانات الاستخدام لتحسين منصتنا."},
     {h:"كيف نستخدم معلوماتك",           b:"تُستخدم بياناتك لتقديم خدماتنا، ومعالجة المدفوعات، وإرسال تحديثات الكورسات، وتحسين تجربة المنصة."},
     {h:"مشاركة البيانات",               b:"لا نبيع بياناتك الشخصية. نشارك البيانات فقط مع معالجي الدفع ومزودي الخدمات اللازمين لتقديم خدماتنا."},
     {h:"الاحتفاظ بالبيانات",            b:"نحتفظ ببياناتك طالما حسابك نشط. يمكنك طلب الحذف في أي وقت عبر التواصل مع الدعم."},
-    {h:"حقوقك",                         b:"لديك الحق في الوصول إلى بياناتك الشخصية وتصحيحها أو حذفها. تواصل معنا على support@orbit.sa لأي طلبات."},
-    {h:"الأمان",                         b:"نستخدم تشفير SSL بقوة 256 بت ونتبع أفضل ممارسات الصناعة لحماية معلوماتك."},
+    {h:"حقوقك",                         b:"لديك الحق في الوصول إلى بياناتك الشخصية وتصحيحها أو حذفها. تواصل معنا على linkybinky9@gmail.com لأي طلبات."},
   ] : [
-    {h:"Information We Collect",        b:"We collect information you provide directly (name, email, payment info) and usage data to improve our platform."},
+    {h:"Information We Collect",        b:"We collect information you provide directly (name, email, ) and usage data to improve our platform."},
     {h:"How We Use Your Information",   b:"Your data is used to provide our services, process payments, send course updates, and improve the platform experience."},
     {h:"Data Sharing",                  b:"We do not sell your personal data. We share data only with payment processors and service providers necessary to deliver our services."},
     {h:"Data Retention",                b:"We retain your data as long as your account is active. You may request deletion at any time by contacting support."},
-    {h:"Your Rights",                   b:"You have the right to access, correct, or delete your personal data. Contact support@orbit.sa for any data requests."},
-    {h:"Security",                      b:"We use 256-bit SSL encryption and follow industry best practices to protect your information."},
+    {h:"Your Rights",                   b:"You have the right to access, correct, or delete your personal data. Contact linkybinky9@gmail.com for any data requests."},
+    {h:"  ",                      b:"  "},
   ];
   return (
     <StaticPage title={isRTL?"سياسة الخصوصية":"Privacy Policy"} isRTL={isRTL}>
@@ -2766,7 +2765,7 @@ function AdminSettings() {
     </div>
 
     <div style={{background:"#fff",padding:32,borderRadius:16,border:"1px solid rgba(45,51,71,0.07)",marginBottom:24}}>
-      <h2 style={{fontSize:16,fontWeight:700,color:C.navy,marginBottom:24}}>Security</h2>
+      <h2 style={{fontSize:16,fontWeight:700,color:C.navy,marginBottom:24}}>  </h2>
       <label style={S.label}>Admin Password</label>
       <input type="password" value="••••••••••" readOnly style={{...S.input,marginBottom:12}}/>
       <button type="button" style={{fontSize:13,color:C.gold,fontWeight:600}}>Change Password</button>
