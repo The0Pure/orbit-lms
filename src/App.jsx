@@ -124,7 +124,7 @@ const T = {
     why: {
       title: "ليش تختار Orbit لتخصصك؟",
       items: [
-        { t:"مبني لتخصصك",      d:"مش كورسات عامة. كل درس مصمم خصيصاً لطلاب التصميم الداخلي والهندسة." },
+        { t:"مبني لتخصصك",      d:"ليس مجرد كورسات عامة. كل درس مصمم خصيصاً لطلاب التصميم الداخلي والهندسة." },
         { t:"تعلّم بوقتك",       d:"جلسات مسجّلة تتناسب مع جدولك الجامعي — بدون ضغط." },
         { t:"تطبيق عملي",       d:"مشاريع وتمارين مع كل كورس. مش بس مشاهدة — تطبيق حقيقي." },
         { t:"بورتفوليو حقيقي",  d:"تخرّج بأعمال تعكس مستواك وتفتحلك أبواب التوظيف والفريلانسينج." },
@@ -172,11 +172,11 @@ const CAT_AR = {
   "Project Management":"إدارة المشاريع","Client Communication":"التواصل مع العملاء",
   "Sustainability":"الاستدامة في التصميم",
   "Design":"التصميم","Development":"التطوير","Data":"البيانات","Cloud":"الحوسبة السحابية",
-  "  ":"الأمن","Mobile":"تطوير الجوال","Business":"الأعمال","Marketing":"التسويق",
+  "Security":"الأمن","Mobile":"تطوير الجوال","Business":"الأعمال","Marketing":"التسويق",
 };
 const LEVEL_AR = { Beginner:"مبتدئ", Intermediate:"متوسط", Advanced:"متقدم" };
 // ═══════════════════════════════════════════
-//    — admin auth (hash-based, no plaintext in UI)
+// SECURITY — admin auth (hash-based, no plaintext in UI)
 // In production: move to server-side auth (Supabase, Firebase, etc.)
 // ═══════════════════════════════════════════
 // ═══════════════════════════════════════════
@@ -411,11 +411,10 @@ export default function App() {
 
     if (provider === "google") {
       const clientId = cfg.googleClientId;
-      if (!clientId) { alert("Google Client ID not configured.\n"); return; }
+      if (!clientId) { alert("Google Client ID not configured.\nGo to Admin → Settings → Social Login to add it."); return; }
       const params = new URLSearchParams({
         client_id:     clientId,
         redirect_uri:  window.location.origin,
-        response_type: "token id_token",
         scope:         "openid email profile",
         nonce:         Math.random().toString(36).slice(2),
         prompt:        "select_account",
@@ -453,7 +452,7 @@ export default function App() {
 
     if (provider === "x") {
       const clientId = cfg.xClientId;
-      if (!clientId) { alert("X (Twitter) Client ID not configured.\n"); return; }
+      if (!clientId) { alert("X (Twitter) Client ID not configured.\nGo to Admin → Settings → Social Login to add it."); return; }
       const params = new URLSearchParams({
         response_type:         "code",
         client_id:             clientId,
@@ -470,7 +469,7 @@ export default function App() {
 
     if (provider === "linkedin") {
       const clientId = cfg.linkedinClientId;
-      if (!clientId) { alert("LinkedIn Client ID not configured.\n"); return; }
+      if (!clientId) { alert("LinkedIn Client ID not configured.\nGo to Admin → Settings → Social Login to add it."); return; }
       const params = new URLSearchParams({
         response_type: "code",
         client_id:     clientId,
@@ -701,7 +700,6 @@ export default function App() {
                     [isRTL?"تصفح الكورسات":"Browse Courses","courses"],
                     [isRTL?"مسارات التعلم":"Learning Paths","courses"],
                     [isRTL?"الشهادات":"Certifications","courses"],
-                    [isRTL?"للأعمال":"For Business","about"],
                   ]
                 },
                 {
@@ -747,6 +745,9 @@ export default function App() {
           </div>
         </footer>
       )}
+
+      {/* ── CHATBOT ── */}
+      {!isAdm && <ChatbotWidget isRTL={isRTL}/>}
 
       <style>{CSS}</style>
     </div>
@@ -955,7 +956,7 @@ function HomePage({ nav, navWithCat, courses, t, isRTL }) {
     {/* CTA */}
     <section style={S.ctaBanner}>
       <div style={{maxWidth:600,margin:"0 auto",textAlign:"center"}}>
-        <h2 style={S.ctaTitle}>Ready to Start Learning?</h2>
+        <h2 style={{...S.ctaTitle,fontFamily:isRTL?"'Cairo',serif":"'Playfair Display',serif"}}>{isRTL?"جاهز تبدأ؟ كل يوم تأخره هو يوم قدام غيرك.":"Ready to Start? Every Day You Wait, Someone Else Moves Ahead."}</h2>
         <p style={S.ctaSub}>{t.cta.sub}</p>
         <button onClick={()=>nav("signup")} style={S.ctaBtn}>{t.cta.btn}</button>
       </div>
@@ -968,6 +969,10 @@ function HomePage({ nav, navWithCat, courses, t, isRTL }) {
 // ═══════════════════════════════════════════
 function CourseCard({ course, onClick }) {
   const isRTL = ls("orb_lang","en") === "ar";
+  // Load live avg rating from reviews
+  const reviews = (() => { try { return JSON.parse(localStorage.getItem(`orb_reviews_${course.id}`))||[]; } catch { return []; } })();
+  const avgRating = reviews.length ? (reviews.reduce((s,r)=>s+r.rating,0)/reviews.length).toFixed(1) : (course.rating||0);
+  const reviewCount = reviews.length;
   return (
     <button onClick={onClick} style={S.cCard}>
       <div style={{height:160,overflow:"hidden",borderRadius:"14px 14px 0 0",position:"relative"}}>
@@ -979,7 +984,7 @@ function CourseCard({ course, onClick }) {
         <h3 style={{fontSize:16,fontWeight:700,color:C.navy,margin:"8px 0",lineHeight:1.35}}>{isRTL&&course.titleAr ? course.titleAr : course.title}</h3>
         <p style={{fontSize:13,color:"#9CA3AF",marginBottom:12}}>{course.instructor}</p>
         <div style={{display:"flex",gap:14,marginBottom:14,flexWrap:"wrap",fontSize:13}}>
-          {course.rating>0 && <span style={{display:"flex",alignItems:"center",gap:4,fontWeight:600,color:C.gold}}><I.Star/>{course.rating}</span>}
+          {avgRating>0 && <span style={{display:"flex",alignItems:"center",gap:4,fontWeight:600,color:C.gold}}><I.Star/>{avgRating}{reviewCount>0&&<span style={{fontSize:11,color:"#9CA3AF",fontWeight:400}}>({reviewCount})</span>}</span>}
           <span style={{display:"flex",alignItems:"center",gap:4,color:"#9CA3AF"}}><I.Clock/>{course.duration}</span>
           {course.students>0 && <span style={{color:"#9CA3AF"}}>{course.students.toLocaleString()} students</span>}
         </div>
@@ -1264,8 +1269,7 @@ function QuizEngine({ module: mod, onComplete, isExam }) {
 // ═══════════════════════════════════════════
 // COURSE LEARNING PAGE — full engine
 // ═══════════════════════════════════════════
-function CourseLearningPage({ course, user, nav, t, isRTL }) {
-  const [active,      setActive]      = useState(0);
+function CourseLearningPage({ course, user, nav, t, isRTL }) {  const [active,      setActive]      = useState(0);
   const [completed,   setCompleted]   = useState(()=>{ try{return JSON.parse(localStorage.getItem(`orb_prog_${user?.id}_${course.id}`))||{};}catch{return {};} });
   const [showCert,    setShowCert]    = useState(false);
   const [showRating,  setShowRating]  = useState(false);
@@ -1372,7 +1376,7 @@ function CourseLearningPage({ course, user, nav, t, isRTL }) {
                   </div>
                 </div>
                 <div style={{background:"#fff",borderRadius:14,padding:"20px 24px",border:"1px solid rgba(45,51,71,0.07)",marginBottom:16}}>
-                  <h2 style={{fontSize:20,fontWeight:700,color:C.navy,marginBottom:6}}>{cur.title}</h2>
+                  <h2 style={{fontSize:20,fontWeight:700,color:C.navy,marginBottom:6}}>{isRTL&&cur.titleAr?cur.titleAr:cur.title}</h2>
                   <p style={{fontSize:14,color:"#9CA3AF",marginBottom:16}}>🎬 Video · {cur.duration}</p>
                   {!completed[active] && <button onClick={()=>markDone(active)} style={{...S.btnPrimary,fontSize:14,padding:"10px 24px"}}>Mark as Complete ✓</button>}
                   {completed[active] && <span style={{color:C.success,fontWeight:700,fontSize:14}}>✓ Completed</span>}
@@ -1388,7 +1392,7 @@ function CourseLearningPage({ course, user, nav, t, isRTL }) {
                   <div><h2 style={{fontSize:20,fontWeight:700,color:C.navy}}>{cur.title}</h2><p style={{fontSize:13,color:"#9CA3AF"}}>Reading · {cur.duration}</p></div>
                 </div>
                 <div style={{fontSize:15,color:"#374151",lineHeight:1.85,whiteSpace:"pre-wrap",borderTop:"1px solid #F0ECE5",paddingTop:20}}>
-                  {cur.content || <span style={{color:"#9CA3AF",fontStyle:"italic"}}>No reading content added yet.</span>}
+                  {(isRTL&&cur.contentAr?cur.contentAr:cur.content) || <span style={{color:"#9CA3AF",fontStyle:"italic"}}>{isRTL?"لم يُضَف محتوى القراءة بعد":"No reading content added yet."}</span>}
                 </div>
                 <div style={{marginTop:24,paddingTop:20,borderTop:"1px solid #F0ECE5"}}>
                   {!completed[active] ? <button onClick={()=>markDone(active)} style={{...S.btnPrimary,fontSize:14,padding:"10px 24px"}}>I've Read This ✓</button>
@@ -1460,21 +1464,33 @@ function CourseLearningPage({ course, user, nav, t, isRTL }) {
             {/* REVIEWS LIST */}
             {reviews.length>0 && (
               <div style={{background:"#fff",borderRadius:16,padding:28,border:"1px solid rgba(45,51,71,0.07)"}}>
-                <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
-                  <h3 style={{fontSize:16,fontWeight:700,color:C.navy}}>Student Reviews</h3>
+                <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20,flexWrap:"wrap"}}>
+                  <h3 style={{fontSize:16,fontWeight:700,color:C.navy}}>{isRTL?"آراء الطلاب":"Student Reviews"}</h3>
                   {avgRating && <span style={{fontSize:16,fontWeight:700,color:C.gold}}>⭐ {avgRating}</span>}
-                  <span style={{fontSize:13,color:"#9CA3AF"}}>({reviews.length} review{reviews.length!==1?"s":""})</span>
+                  <span style={{fontSize:13,color:"#9CA3AF"}}>({reviews.length} {isRTL?"تقييم":"review"}{!isRTL&&reviews.length!==1?"s":""})</span>
                 </div>
                 {reviews.map(r=>(
                   <div key={r.id} style={{borderBottom:"1px solid #F0ECE5",paddingBottom:16,marginBottom:16}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <div style={{width:32,height:32,borderRadius:"50%",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:C.cream}}>{r.userName?.[0]}</div>
+                        <div style={{width:32,height:32,borderRadius:"50%",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:C.cream,flexShrink:0}}>{r.userName?.[0]}</div>
                         <div><p style={{fontSize:14,fontWeight:600,color:C.navy}}>{r.userName}</p><p style={{fontSize:11,color:"#9CA3AF"}}>{r.date}</p></div>
                       </div>
-                      <span style={{color:C.gold,fontSize:14}}>{"⭐".repeat(r.rating)}</span>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{color:C.gold,fontSize:14}}>{"⭐".repeat(r.rating)}</span>
+                        {/* Admin delete button */}
+                        {user?.role==="admin" && (
+                          <button onClick={()=>{
+                            const updated=reviews.filter(x=>x.id!==r.id);
+                            setReviews(updated);
+                            localStorage.setItem(`orb_reviews_${course.id}`,JSON.stringify(updated));
+                          }} style={{fontSize:11,color:C.danger,fontWeight:600,padding:"3px 8px",background:C.dangerBg,borderRadius:6}}>
+                            {isRTL?"حذف":"Delete"}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <p style={{fontSize:14,color:"#4A5568",lineHeight:1.6}}>{r.comment}</p>
+                    <p style={{fontSize:14,color:"#4A5568",lineHeight:1.6,textAlign:isRTL?"right":"left"}}>{r.comment}</p>
                   </div>
                 ))}
               </div>
@@ -1679,7 +1695,17 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
               <span style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,color:C.navy}}>Orbit</span>
             </div>
             <h1 style={{...S.authTitle,fontFamily:isRTL?"'Cairo',sans-serif":"'Playfair Display',serif",textAlign:isRTL?"right":"left"}}>{t.signup.title}</h1>
-            <p style={{fontSize:14,color:"#9CA3AF",marginBottom:24,textAlign:isRTL?"right":"left"}}>{t.signup.hasAccount} <button onClick={()=>nav("login")} style={{color:C.gold,fontWeight:600}}>{t.signup.loginLink}</button></p>
+            <p style={{fontSize:14,color:"#9CA3AF",marginBottom:16,textAlign:isRTL?"right":"left"}}>{t.signup.hasAccount} <button onClick={()=>nav("login")} style={{color:C.gold,fontWeight:600}}>{t.signup.loginLink}</button></p>
+
+            {/* CERTIFICATE NAME NOTICE */}
+            <div style={{padding:14,background:`${C.gold}10`,border:`1.5px solid ${C.gold}30`,borderRadius:12,marginBottom:20,display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:18,flexShrink:0}}>🎓</span>
+              <p style={{fontSize:13,color:C.goldD,lineHeight:1.7,textAlign:isRTL?"right":"left"}}>
+                {isRTL
+                  ? "الاسم الأول والأخير اللذان تدخلهما سيظهران على شهادة الإتمام. تأكد من كتابتهما بشكل صحيح — لا يمكن تعديلهما لاحقاً."
+                  : "Your first and last name will appear on your course certificates. Please enter your full legal name — this cannot be changed later."}
+              </p>
+            </div>
             {err && <div style={S.errBox}>{err}</div>}
             <form onSubmit={go}>
               <div className="name-grid" style={{marginBottom:16}}>
@@ -1790,19 +1816,36 @@ function AboutPage({ nav, t }) {
 
 function CareersPage({ nav, t }) {
   const isRTL = t?.dir === "rtl";
-  const roles = isRTL ? [
-    {t:"مهندس واجهات أمامية أول",    d:"التصميم والهندسة",  l:"عن بُعد / الرياض", type:"دوام كامل"},
-    {t:"مصمم مناهج تعليمية",          d:"التعليم",           l:"الرياض",            type:"دوام كامل"},
-    {t:"منتج فيديو تعليمي",           d:"المحتوى",           l:"عن بُعد",           type:"عقد"},
-    {t:"مدير تسويق النمو",             d:"التسويق",           l:"الرياض",            type:"دوام كامل"},
+  const jobs   = ls("orb_jobs", []);
+  const [selJob,   setSelJob]   = useState(null);
+  const [form,     setForm]     = useState({name:"",email:"",phone:"",cover:""});
+  const [cvFile,   setCvFile]   = useState(null);
+  const [success,  setSuccess]  = useState(false);
+  const [err,      setErr]      = useState("");
+  const fileRef = useRef();
+
+  // Fallback demo jobs if admin hasn't posted yet
+  const displayJobs = jobs.length > 0 ? jobs : (isRTL ? [
+    {id:"demo1",titleEn:"Senior Frontend Engineer",titleAr:"مهندس واجهات أمامية أول",deptEn:"Engineering",deptAr:"الهندسة",locationEn:"Remote / Riyadh",locationAr:"عن بُعد / الرياض",typeEn:"Full-time",typeAr:"دوام كامل"},
+    {id:"demo2",titleEn:"Curriculum Designer",titleAr:"مصمم مناهج تعليمية",deptEn:"Education",deptAr:"التعليم",locationEn:"Riyadh",locationAr:"الرياض",typeEn:"Full-time",typeAr:"دوام كامل"},
   ] : [
-    {t:"Senior Frontend Engineer",    d:"Design & Engineering", l:"Remote / Riyadh", type:"Full-time"},
-    {t:"Curriculum Designer",         d:"Education",            l:"Riyadh",           type:"Full-time"},
-    {t:"Instructional Video Producer",d:"Content",              l:"Remote",           type:"Contract"},
-    {t:"Growth Marketing Manager",    d:"Marketing",            l:"Riyadh",           type:"Full-time"},
-  ];
+    {id:"demo1",titleEn:"Senior Frontend Engineer",titleAr:"مهندس واجهات أمامية أول",deptEn:"Engineering",deptAr:"الهندسة",locationEn:"Remote / Riyadh",locationAr:"عن بُعد / الرياض",typeEn:"Full-time",typeAr:"دوام كامل"},
+    {id:"demo2",titleEn:"Curriculum Designer",titleAr:"مصمم مناهج تعليمية",deptEn:"Education",deptAr:"التعليم",locationEn:"Riyadh",locationAr:"الرياض",typeEn:"Full-time",typeAr:"دوام كامل"},
+  ]);
+
+  const handleApply = (e) => {
+    e.preventDefault(); setErr("");
+    if (!form.name||!form.email) { setErr(isRTL?"الرجاء إدخال الاسم والبريد الإلكتروني":"Please fill name and email"); return; }
+    // Save application
+    const app = { id:`app-${Date.now()}`, jobId:selJob.id, name:form.name, email:form.email, phone:form.phone, cover:form.cover, cvName:cvFile?.name||"", date:new Date().toLocaleDateString() };
+    const apps = ls("orb_apps",[]);
+    ss("orb_apps",[...apps,app]);
+    setSuccess(true);
+  };
+
   return (
     <StaticPage title={isRTL?"الوظائف في Orbit":"Careers at Orbit"} isRTL={isRTL}>
+      {/* INTRO */}
       <div style={{background:"#fff",borderRadius:20,padding:40,border:"1px solid rgba(45,51,71,0.07)",marginBottom:32}}>
         <h2 style={{fontFamily:isRTL?"'Cairo',serif":"'Playfair Display',serif",fontSize:22,fontWeight:700,color:C.navy,marginBottom:12,textAlign:isRTL?"right":"left"}}>
           {isRTL?"انضم إلى فريقنا":"Join Our Team"}
@@ -1813,20 +1856,67 @@ function CareersPage({ nav, t }) {
             : "We're building the future of professional education in the Arab world. If you're passionate about learning, design, and technology — we'd love to meet you."}
         </p>
       </div>
-      <div style={{display:"flex",flexDirection:"column",gap:16}}>
-        {roles.map((r,i)=>(
-          <div key={i} style={{background:"#fff",borderRadius:16,padding:28,border:"1px solid rgba(45,51,71,0.07)",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:16,flexDirection:isRTL?"row-reverse":"row"}}>
+
+      {/* JOB LISTINGS */}
+      <div style={{display:"flex",flexDirection:"column",gap:16,marginBottom:32}}>
+        {displayJobs.map((j)=>(
+          <div key={j.id} style={{background:"#fff",borderRadius:16,padding:28,border:"1px solid rgba(45,51,71,0.07)",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:16,flexDirection:isRTL?"row-reverse":"row"}}>
             <div style={{textAlign:isRTL?"right":"left"}}>
-              <h3 style={{fontSize:17,fontWeight:700,color:C.navy,marginBottom:6}}>{r.t}</h3>
-              <div style={{display:"flex",gap:16,fontSize:13,color:"#6B7280",flexDirection:isRTL?"row-reverse":"row"}}>
-                <span>{r.d}</span><span>{r.l}</span>
-                <span style={{padding:"2px 10px",background:`${C.teal}15`,color:C.teal,borderRadius:20,fontWeight:600}}>{r.type}</span>
+              <h3 style={{fontSize:17,fontWeight:700,color:C.navy,marginBottom:6}}>{isRTL?j.titleAr:j.titleEn}</h3>
+              <div style={{display:"flex",gap:12,fontSize:13,color:"#6B7280",flexWrap:"wrap",flexDirection:isRTL?"row-reverse":"row"}}>
+                <span>{isRTL?j.deptAr:j.deptEn}</span>
+                <span>{isRTL?j.locationAr:j.locationEn}</span>
+                <span style={{padding:"2px 10px",background:`${C.teal}15`,color:C.teal,borderRadius:20,fontWeight:600}}>{isRTL?j.typeAr:j.typeEn}</span>
               </div>
+              {(isRTL?j.descAr:j.descEn) && <p style={{fontSize:13,color:"#6B7280",marginTop:8,lineHeight:1.7}}>{isRTL?j.descAr:j.descEn}</p>}
             </div>
-            <button style={{...S.btnPrimary,padding:"10px 24px",fontSize:14}}>{isRTL?"تقدّم الآن ←":"Apply →"}</button>
+            <button onClick={()=>{setSelJob(j);setSuccess(false);setForm({name:"",email:"",phone:"",cover:""}); setCvFile(null);}} style={{...S.btnPrimary,padding:"10px 24px",fontSize:14}}>
+              {isRTL?"تقدّم الآن ←":"Apply →"}
+            </button>
           </div>
         ))}
+        {displayJobs.length===0 && <div style={{...S.empty,padding:40}}><p style={{color:"#9CA3AF"}}>{isRTL?"لا توجد وظائف متاحة حالياً":"No open positions at the moment"}</p></div>}
       </div>
+
+      {/* APPLICATION MODAL */}
+      {selJob && <div style={S.modalOv} onClick={()=>setSelJob(null)}>
+        <div style={{...S.modal,maxWidth:520}} onClick={e=>e.stopPropagation()}>
+          <div style={S.modalHead}>
+            <div>
+              <h2 style={{fontSize:18,fontWeight:700,color:C.navy}}>{isRTL?"تقديم طلب":"Apply Now"}</h2>
+              <p style={{fontSize:13,color:"#9CA3AF",marginTop:2}}>{isRTL?selJob.titleAr:selJob.titleEn}</p>
+            </div>
+            <button onClick={()=>setSelJob(null)} style={{color:"#9CA3AF"}}><I.X/></button>
+          </div>
+          <div style={{padding:28,overflowY:"auto",maxHeight:"80vh",direction:isRTL?"rtl":"ltr",fontFamily:isRTL?"'Cairo',sans-serif":"inherit"}}>
+            {success ? (
+              <div style={{textAlign:"center",padding:"32px 0"}}>
+                <div style={{fontSize:48,marginBottom:16}}>✅</div>
+                <h3 style={{fontSize:20,fontWeight:700,color:C.navy,marginBottom:8}}>{isRTL?"تم إرسال طلبك!":"Application Submitted!"}</h3>
+                <p style={{fontSize:14,color:"#6B7280",lineHeight:1.7}}>{isRTL?"شكراً لاهتمامك. سنراجع طلبك ونتواصل معك قريباً.":"Thank you for your interest. We'll review your application and get back to you soon."}</p>
+              </div>
+            ) : (
+              <form onSubmit={handleApply}>
+                {err && <div style={S.errBox}>{err}</div>}
+                <label style={{...S.label,textAlign:isRTL?"right":"left",display:"block"}}>{isRTL?"الاسم الكامل *":"Full Name *"}</label>
+                <input required value={form.name} onChange={e=>setForm({...form,name:e.target.value})} style={{...S.input,marginBottom:14,textAlign:isRTL?"right":"left"}}/>
+                <label style={{...S.label,textAlign:isRTL?"right":"left",display:"block"}}>{isRTL?"البريد الإلكتروني *":"Email *"}</label>
+                <input required type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} style={{...S.input,marginBottom:14,textAlign:isRTL?"right":"left"}}/>
+                <label style={{...S.label,textAlign:isRTL?"right":"left",display:"block"}}>{isRTL?"رقم الجوال":"Phone Number"}</label>
+                <input type="tel" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} style={{...S.input,marginBottom:14,textAlign:isRTL?"right":"left"}}/>
+                <label style={{...S.label,textAlign:isRTL?"right":"left",display:"block"}}>{isRTL?"رفع السيرة الذاتية (PDF)":"Upload CV (PDF)"}</label>
+                <div style={{padding:16,background:C.bg,borderRadius:10,border:"1.5px dashed #D1D5DB",marginBottom:14,textAlign:"center",cursor:"pointer"}} onClick={()=>fileRef.current?.click()}>
+                  {cvFile ? <p style={{fontSize:14,color:C.teal,fontWeight:600}}>📄 {cvFile.name}</p> : <p style={{fontSize:13,color:"#9CA3AF"}}>{isRTL?"اضغط لرفع ملف PDF":"Click to upload PDF"}</p>}
+                  <input ref={fileRef} type="file" accept=".pdf,.doc,.docx" style={{display:"none"}} onChange={e=>setCvFile(e.target.files?.[0])}/>
+                </div>
+                <label style={{...S.label,textAlign:isRTL?"right":"left",display:"block"}}>{isRTL?"رسالة التعريف (اختياري)":"Cover Letter (optional)"}</label>
+                <textarea rows={4} value={form.cover} onChange={e=>setForm({...form,cover:e.target.value})} placeholder={isRTL?"اكتب رسالتك هنا...":"Tell us why you'd be a great fit..."} style={{...S.input,resize:"vertical",marginBottom:20,textAlign:isRTL?"right":"left"}}/>
+                <button type="submit" style={{...S.btnPrimary,width:"100%",justifyContent:"center",padding:"14px 0"}}>{isRTL?"إرسال الطلب":"Submit Application"}</button>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>}
     </StaticPage>
   );
 }
@@ -1835,20 +1925,20 @@ function HelpPage({ nav, t }) {
   const isRTL = t?.dir === "rtl";
   const faqs = isRTL ? [
     {q:"كيف أسجّل في كورس؟",                  a:"تصفح الكورسات، اضغط على أي كورس، ثم اضغط 'اشترك الآن'. سيرشدك النظام خلال عملية الدفع الآمنة."},
-    {q:"ما وسائل الدفع المقبولة؟",              a:"نقبل البطاقات الائتمانية، Apple Pay، و . جميع الأسعار تشمل ضريبة القيمة المضافة 15% وفق لوائح المملكة."},
+    {q:"ما وسائل الدفع المقبولة؟",              a:"نقبل البطاقات الائتمانية، Apple Pay، وSTC Pay. جميع الأسعار تشمل ضريبة القيمة المضافة 15% وفق لوائح المملكة."},
     {q:"هل يمكنني استرداد المبلغ؟",             a:"نقدم ضمان استرداد كامل خلال 7 أيام من الشراء. تواصل مع الدعم خلال 7 أيام إذا لم تكن راضياً."},
     {q:"كيف أصل إلى كورساتي؟",                 a:"بعد الاشتراك، انتقل إلى لوحتك واضغط على 'كمّل التعلم' في أي كورس مسجّل."},
     {q:"هل تنتهي صلاحية الكورسات؟",            a:"لا. بمجرد اشتراكك، تحصل على وصول مدى الحياة لمحتوى الكورس بما يشمل أي تحديثات مستقبلية."},
   ] : [
     {q:"How do I enroll in a course?",         a:"Browse courses, click on any course, then click 'Enroll Now'. You'll be guided through a secure payment process."},
-    {q:"What payment methods are accepted?",   a:"We accept Credit/Debit cards, Apple Pay, and  . All prices include 15% VAT as required by Saudi regulations."},
+    {q:"What payment methods are accepted?",   a:"We accept Credit/Debit cards, Apple Pay, and STC Pay. All prices include 15% VAT as required by Saudi regulations."},
     {q:"Can I get a refund?",                  a:"We offer a 7-day money-back guarantee for all courses. Contact support within 7 days of purchase if you're not satisfied."},
     {q:"How do I access my courses?",          a:"After enrollment, go to your Dashboard and click 'Continue Learning' on any enrolled course."},
     {q:"Do courses expire?",                   a:"No. Once enrolled, you have lifetime access to the course content including any future updates."},
   ];
   const contacts = isRTL
-    ? [{icon:"✉️",l:"البريد الإلكتروني",v:"linkybinky9@gmail.com"},{icon:"💬",l:"الدردشة المباشرة",v:"متاح داخل التطبيق"}]
-    : [{icon:"✉️",l:"Email",v:"linkybinky9@gmail.com"},{icon:"💬",l:"Live Chat",v:"Available in-app"}];
+    ? [{icon:"✉️",l:"البريد الإلكتروني",v:"support@orbit.sa"},{icon:"💬",l:"الدردشة المباشرة",v:"متاح داخل التطبيق"}]
+    : [{icon:"✉️",l:"Email",v:"support@orbit.sa"},{icon:"💬",l:"Live Chat",v:"Available in-app"}];
   return (
     <StaticPage title={isRTL?"مركز المساعدة":"Help Center"} isRTL={isRTL}>
       <div style={{background:"#fff",borderRadius:20,padding:40,border:"1px solid rgba(45,51,71,0.07)",marginBottom:32}}>
@@ -1894,18 +1984,19 @@ function FaqItem({ q, a, isRTL }) {
 function PrivacyPage({ nav, t }) {
   const isRTL = t?.dir === "rtl";
   const sections = isRTL ? [
-    {h:"المعلومات التي نجمعها",         b:"نجمع المعلومات التي تقدمها مباشرةً (الاسم، البريد الإلكتروني) وبيانات الاستخدام لتحسين منصتنا."},
+    {h:"المعلومات التي نجمعها",         b:"نجمع المعلومات التي تقدمها مباشرةً (الاسم، البريد الإلكتروني، معلومات الدفع) وبيانات الاستخدام لتحسين منصتنا."},
     {h:"كيف نستخدم معلوماتك",           b:"تُستخدم بياناتك لتقديم خدماتنا، ومعالجة المدفوعات، وإرسال تحديثات الكورسات، وتحسين تجربة المنصة."},
     {h:"مشاركة البيانات",               b:"لا نبيع بياناتك الشخصية. نشارك البيانات فقط مع معالجي الدفع ومزودي الخدمات اللازمين لتقديم خدماتنا."},
     {h:"الاحتفاظ بالبيانات",            b:"نحتفظ ببياناتك طالما حسابك نشط. يمكنك طلب الحذف في أي وقت عبر التواصل مع الدعم."},
-    {h:"حقوقك",                         b:"لديك الحق في الوصول إلى بياناتك الشخصية وتصحيحها أو حذفها. تواصل معنا على linkybinky9@gmail.com لأي طلبات."},
+    {h:"حقوقك",                         b:"لديك الحق في الوصول إلى بياناتك الشخصية وتصحيحها أو حذفها. تواصل معنا على support@orbit.sa لأي طلبات."},
+    {h:"الأمان",                         b:"نستخدم تشفير SSL بقوة 256 بت ونتبع أفضل ممارسات الصناعة لحماية معلوماتك."},
   ] : [
-    {h:"Information We Collect",        b:"We collect information you provide directly (name, email, ) and usage data to improve our platform."},
+    {h:"Information We Collect",        b:"We collect information you provide directly (name, email, payment info) and usage data to improve our platform."},
     {h:"How We Use Your Information",   b:"Your data is used to provide our services, process payments, send course updates, and improve the platform experience."},
     {h:"Data Sharing",                  b:"We do not sell your personal data. We share data only with payment processors and service providers necessary to deliver our services."},
     {h:"Data Retention",                b:"We retain your data as long as your account is active. You may request deletion at any time by contacting support."},
-    {h:"Your Rights",                   b:"You have the right to access, correct, or delete your personal data. Contact linkybinky9@gmail.com for any data requests."},
-    {h:"  ",                      b:"  "},
+    {h:"Your Rights",                   b:"You have the right to access, correct, or delete your personal data. Contact support@orbit.sa for any data requests."},
+    {h:"Security",                      b:"We use 256-bit SSL encryption and follow industry best practices to protect your information."},
   ];
   return (
     <StaticPage title={isRTL?"سياسة الخصوصية":"Privacy Policy"} isRTL={isRTL}>
@@ -1966,6 +2057,7 @@ function AdminLayout({ user, logout, sec, setSec, courses, orders, users, addCou
     {id:"overview",  icon:<I.Grid/>,    l:"Overview"},
     {id:"courses",   icon:<I.Book/>,    l:"Courses"},
     {id:"users",     icon:<I.Users/>,   l:"Users"},
+    {id:"careers",   icon:<I.Briefcase/>,l:"Careers"},
     {id:"revenue",   icon:<I.Dollar/>,  l:"Revenue"},
     {id:"settings",  icon:<I.Settings/>,l:"Settings"},
   ];
@@ -1989,6 +2081,7 @@ function AdminLayout({ user, logout, sec, setSec, courses, orders, users, addCou
       {sec==="courses"     && <AdminCourses courses={courses} updateCourse={updateCourse} deleteCourse={deleteCourse} setSec={setSec} setSelCourse={setSelCourse}/>}
       {sec==="course-form" && <AdminCourseForm course={selCourse} addCourse={addCourse} updateCourse={updateCourse} setSec={setSec} setSelCourse={setSelCourse}/>}
       {sec==="users"       && <AdminUsers users={users} addUserAdmin={addUserAdmin} updateUser={updateUser} deleteUser={deleteUser}/>}
+      {sec==="careers"     && <AdminCareers/>}
       {sec==="revenue"     && <AdminRevenue orders={orders}/>}
       {sec==="settings"    && <AdminSettings/>}
     </main>
@@ -2339,9 +2432,8 @@ function AdminCourseForm({ course, addCourse, updateCourse, setSec, setSelCourse
               <button type="button" onClick={()=>delMod(i)} style={{color:C.danger,fontSize:13,fontWeight:600}}>Delete</button>
             </div>
 
-            {/* TITLE + TYPE + DURATION */}
-            <input placeholder="Module title" value={m.title} onChange={e=>updMod(i,"title",e.target.value)} style={{...S.input,marginBottom:10}}/>
-            <div className="form-grid-2" style={{marginBottom:10}}>
+            {/* TYPE + DURATION */}
+            <div className="form-grid-2" style={{marginBottom:12}}>
               <div>
                 <label style={{...S.label,marginBottom:5}}>Type</label>
                 <select value={m.type} onChange={e=>updMod(i,"type",e.target.value)} style={S.input}>
@@ -2358,114 +2450,129 @@ function AdminCourseForm({ course, addCourse, updateCourse, setSec, setSelCourse
               </div>
             </div>
 
-            {/* VIDEO */}
-            {m.type==="video" && <div style={{marginBottom:10}}>
-              <label style={{...S.label,marginBottom:5}}>Video URL (YouTube / Vimeo)</label>
-              <input placeholder="https://youtube.com/watch?v=..." value={m.videoUrl||""} onChange={e=>updMod(i,"videoUrl",e.target.value)} style={S.input}/>
-            </div>}
-
-            {/* READING — rich text box */}
-            {m.type==="reading" && <div style={{marginBottom:10}}>
-              <label style={{...S.label,marginBottom:5}}>Reading Content</label>
-              <textarea
-                rows={8}
-                placeholder="Write your reading content here. You can include explanations, definitions, examples, links, and formatted text..."
-                value={m.content||""}
-                onChange={e=>updMod(i,"content",e.target.value)}
-                style={{...S.input,resize:"vertical",fontFamily:"inherit",lineHeight:1.7,fontSize:14}}
-              />
-              <p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>Tip: Use line breaks for paragraphs. Students will see this as formatted text.</p>
-            </div>}
-
-            {/* QUIZ */}
-            {m.type==="quiz" && <div style={{marginBottom:10}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <label style={S.label}>Quiz Questions</label>
-                <button type="button" onClick={()=>updMod(i,"questions",[...(m.questions||[]),{id:`q-${Date.now()}`,text:"",options:["","","",""],correct:0}])} style={{fontSize:12,fontWeight:700,color:C.teal,background:`${C.teal}12`,padding:"5px 12px",borderRadius:6}}>+ Add Question</button>
+            {/* ── BILINGUAL CONTENT TABS FOR EACH MODULE ── */}
+            <div style={{border:"1px solid #E8E4DD",borderRadius:12,overflow:"hidden",marginBottom:12}}>
+              <div style={{display:"flex",background:"#F9F8F5",borderBottom:"1px solid #E8E4DD"}}>
+                {[["en","🇬🇧 EN"],["ar","🇸🇦 AR"]].map(([lng,label])=>(
+                  <button key={lng} type="button" onClick={()=>updMod(i,"_langTab",lng)}
+                    style={{flex:1,padding:"9px 12px",fontSize:13,fontWeight:(m._langTab||"en")===lng?700:500,color:(m._langTab||"en")===lng?C.navy:"#9CA3AF",background:(m._langTab||"en")===lng?"#fff":"transparent",borderBottom:(m._langTab||"en")===lng?`2px solid ${C.gold}`:"2px solid transparent",marginBottom:-1}}>
+                    {label}
+                  </button>
+                ))}
+                {/* Status */}
+                <div style={{display:"flex",alignItems:"center",padding:"0 12px",gap:8,fontSize:11}}>
+                  <span style={{color:m.title?C.success:"#9CA3AF"}}>{m.title?"✓ EN":""}</span>
+                  <span style={{color:m.titleAr?C.success:"#9CA3AF"}}>{m.titleAr?"✓ AR":""}</span>
+                </div>
               </div>
-              {(m.questions||[]).map((q,qi)=>(
-                <div key={q.id||qi} style={{padding:16,background:"#fff",borderRadius:10,marginBottom:10,border:"1px solid #E8E4DD"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                    <span style={{fontSize:12,fontWeight:700,color:"#6B7280"}}>Q{qi+1}</span>
-                    <button type="button" onClick={()=>updMod(i,"questions",(m.questions||[]).filter((_,j)=>j!==qi))} style={{color:C.danger,fontSize:12,fontWeight:600}}>Remove</button>
-                  </div>
-                  <input placeholder={`Question ${qi+1}...`} value={q.text} onChange={e=>{const qs=[...(m.questions||[])];qs[qi]={...qs[qi],text:e.target.value};updMod(i,"questions",qs);}} style={{...S.input,marginBottom:8,fontSize:14}}/>
-                  <div style={{display:"grid",gap:6}}>
-                    {q.options.map((opt,oi)=>(
-                      <div key={oi} style={{display:"flex",alignItems:"center",gap:8}}>
-                        <input type="radio" name={`q-${i}-${qi}`} checked={q.correct===oi} onChange={()=>{const qs=[...(m.questions||[])];qs[qi]={...qs[qi],correct:oi};updMod(i,"questions",qs);}} style={{width:16,height:16,flexShrink:0,accentColor:C.teal}}/>
-                        <input placeholder={`Option ${oi+1}${q.correct===oi?" ← Correct answer":""}`} value={opt} onChange={e=>{const qs=[...(m.questions||[])];const opts=[...qs[qi].options];opts[oi]=e.target.value;qs[qi]={...qs[qi],options:opts};updMod(i,"questions",qs);}} style={{...S.input,fontSize:13,padding:"8px 12px",background:q.correct===oi?"rgba(74,124,111,0.06)":"#fff",borderColor:q.correct===oi?C.teal:"#E8E4DD"}}/>
+
+              {/* ENGLISH FIELDS */}
+              {(m._langTab||"en")==="en" && (
+                <div style={{padding:16}}>
+                  <label style={{...S.label,marginBottom:5}}>Module Title (English) *</label>
+                  <input placeholder="e.g. Introduction to AutoCAD Interface" value={m.title||""} onChange={e=>updMod(i,"title",e.target.value)} style={{...S.input,marginBottom:m.type==="reading"||m.type==="project"?12:0}}/>
+                  {m.type==="video" && <div style={{marginTop:12}}>
+                    <label style={{...S.label,marginBottom:5}}>Video URL (YouTube / Vimeo)</label>
+                    <input placeholder="https://youtube.com/watch?v=..." value={m.videoUrl||""} onChange={e=>updMod(i,"videoUrl",e.target.value)} style={S.input}/>
+                  </div>}
+                  {m.type==="reading" && <>
+                    <label style={{...S.label,marginBottom:5}}>Reading Content (English)</label>
+                    <textarea rows={7} placeholder="Write your reading content in English..." value={m.content||""} onChange={e=>updMod(i,"content",e.target.value)} style={{...S.input,resize:"vertical",lineHeight:1.7,fontSize:14}}/>
+                    <p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>Use line breaks for paragraphs.</p>
+                  </>}
+                  {m.type==="project" && <>
+                    <label style={{...S.label,marginBottom:5}}>Project Brief (English)</label>
+                    <textarea rows={5} placeholder="Describe the project task in English..." value={m.content||""} onChange={e=>updMod(i,"content",e.target.value)} style={{...S.input,resize:"vertical",lineHeight:1.7}}/>
+                    <label style={{...S.label,marginBottom:5,marginTop:10}}>Submission Type</label>
+                    <select value={m.submitType||"file"} onChange={e=>updMod(i,"submitType",e.target.value)} style={S.input}><option value="file">File Upload</option><option value="link">URL / Link</option><option value="text">Text Response</option></select>
+                  </>}
+                  {(m.type==="quiz"||m.type==="exam") && <>
+                    <div style={{marginTop:12,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                      <label style={S.label}>{m.type==="exam"?"Exam":"Quiz"} Questions (English)</label>
+                      <button type="button" onClick={()=>updMod(i,"questions",[...(m.questions||[]),{id:`q-${Date.now()}`,text:"",textAr:"",options:["","","",""],optionsAr:["","","",""],correct:0}])}
+                        style={{fontSize:12,fontWeight:700,color:m.type==="exam"?C.gold:C.teal,background:m.type==="exam"?`${C.gold}12`:`${C.teal}12`,padding:"5px 12px",borderRadius:6}}>+ Add Question</button>
+                    </div>
+                    {(m.questions||[]).map((q,qi)=>(
+                      <div key={q.id||qi} style={{padding:14,background:"#fff",borderRadius:10,marginBottom:8,border:"1px solid #E8E4DD"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                          <span style={{fontSize:12,fontWeight:700,color:"#6B7280"}}>Q{qi+1} (EN)</span>
+                          <button type="button" onClick={()=>updMod(i,"questions",(m.questions||[]).filter((_,j)=>j!==qi))} style={{color:C.danger,fontSize:12,fontWeight:600}}>Remove</button>
+                        </div>
+                        <input placeholder={`Question ${qi+1} in English...`} value={q.text} onChange={e=>{const qs=[...(m.questions||[])];qs[qi]={...qs[qi],text:e.target.value};updMod(i,"questions",qs);}} style={{...S.input,marginBottom:8,fontSize:14}}/>
+                        <div style={{display:"grid",gap:6}}>
+                          {q.options.map((opt,oi)=>(
+                            <div key={oi} style={{display:"flex",alignItems:"center",gap:8}}>
+                              <input type="radio" name={`q-${i}-${qi}`} checked={q.correct===oi} onChange={()=>{const qs=[...(m.questions||[])];qs[qi]={...qs[qi],correct:oi};updMod(i,"questions",qs);}} style={{width:16,height:16,accentColor:C.teal}}/>
+                              <input placeholder={`Option ${oi+1}${q.correct===oi?" ✓":""}` } value={opt} onChange={e=>{const qs=[...(m.questions||[])];const opts=[...qs[qi].options];opts[oi]=e.target.value;qs[qi]={...qs[qi],options:opts};updMod(i,"questions",qs);}} style={{...S.input,fontSize:13,padding:"7px 12px",background:q.correct===oi?"rgba(74,124,111,0.06)":"#fff",borderColor:q.correct===oi?C.teal:"#E8E4DD"}}/>
+                            </div>
+                          ))}
+                        </div>
+                        <p style={{fontSize:11,color:C.teal,marginTop:4}}>● Select the correct answer</p>
                       </div>
                     ))}
-                  </div>
-                  <p style={{fontSize:11,color:C.teal,marginTop:6}}>● Select the radio button next to the correct answer</p>
+                    {!(m.questions||[]).length && <div style={{padding:20,textAlign:"center",background:"#fff",borderRadius:10,border:"1px dashed #E8E4DD"}}><p style={{color:"#9CA3AF",fontSize:13}}>No questions yet.</p></div>}
+                    <div style={{display:"flex",gap:12,marginTop:10}}>
+                      <div style={{flex:1}}><label style={{...S.label,marginBottom:5}}>Pass Score (%)</label><input type="number" min={0} max={100} placeholder="70" value={m.passScore||""} onChange={e=>updMod(i,"passScore",e.target.value)} style={S.input}/></div>
+                      <div style={{flex:1}}><label style={{...S.label,marginBottom:5}}>Time Limit (min)</label><input type="number" min={1} placeholder="30" value={m.timeLimit||""} onChange={e=>updMod(i,"timeLimit",e.target.value)} style={S.input}/></div>
+                    </div>
+                  </>}
                 </div>
-              ))}
-              {!(m.questions||[]).length && <div style={{padding:24,textAlign:"center",background:"#fff",borderRadius:10,border:"1px dashed #E8E4DD"}}><p style={{color:"#9CA3AF",fontSize:13}}>No questions yet. Click "+ Add Question" above.</p></div>}
-              <div style={{display:"flex",gap:12,marginTop:8}}>
-                <div style={{flex:1}}><label style={{...S.label,marginBottom:5}}>Pass Score (%)</label><input type="number" min={0} max={100} placeholder="70" value={m.passScore||""} onChange={e=>updMod(i,"passScore",e.target.value)} style={S.input}/></div>
-                <div style={{flex:1}}><label style={{...S.label,marginBottom:5}}>Time Limit (minutes)</label><input type="number" min={1} placeholder="30" value={m.timeLimit||""} onChange={e=>updMod(i,"timeLimit",e.target.value)} style={S.input}/></div>
-              </div>
-            </div>}
-
-            {/* EXAM */}
-            {m.type==="exam" && <div style={{marginBottom:10}}>
-              <div style={{padding:16,background:`${C.gold}08`,borderRadius:10,border:`1px solid ${C.gold}30`,marginBottom:12}}>
-                <p style={{fontSize:13,fontWeight:600,color:C.goldD}}>🎓 Final Exam — Completing this exam at passing score will trigger the course certificate.</p>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <label style={S.label}>Exam Questions</label>
-                <button type="button" onClick={()=>updMod(i,"questions",[...(m.questions||[]),{id:`q-${Date.now()}`,text:"",options:["","","",""],correct:0}])} style={{fontSize:12,fontWeight:700,color:C.gold,background:`${C.gold}12`,padding:"5px 12px",borderRadius:6}}>+ Add Question</button>
-              </div>
-              {(m.questions||[]).map((q,qi)=>(
-                <div key={q.id||qi} style={{padding:16,background:"#fff",borderRadius:10,marginBottom:10,border:"1px solid #E8E4DD"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                    <span style={{fontSize:12,fontWeight:700,color:"#6B7280"}}>Q{qi+1}</span>
-                    <button type="button" onClick={()=>updMod(i,"questions",(m.questions||[]).filter((_,j)=>j!==qi))} style={{color:C.danger,fontSize:12,fontWeight:600}}>Remove</button>
-                  </div>
-                  <input placeholder={`Exam question ${qi+1}...`} value={q.text} onChange={e=>{const qs=[...(m.questions||[])];qs[qi]={...qs[qi],text:e.target.value};updMod(i,"questions",qs);}} style={{...S.input,marginBottom:8,fontSize:14}}/>
-                  <div style={{display:"grid",gap:6}}>
-                    {q.options.map((opt,oi)=>(
-                      <div key={oi} style={{display:"flex",alignItems:"center",gap:8}}>
-                        <input type="radio" name={`eq-${i}-${qi}`} checked={q.correct===oi} onChange={()=>{const qs=[...(m.questions||[])];qs[qi]={...qs[qi],correct:oi};updMod(i,"questions",qs);}} style={{width:16,height:16,flexShrink:0,accentColor:C.gold}}/>
-                        <input placeholder={`Option ${oi+1}`} value={opt} onChange={e=>{const qs=[...(m.questions||[])];const opts=[...qs[qi].options];opts[oi]=e.target.value;qs[qi]={...qs[qi],options:opts};updMod(i,"questions",qs);}} style={{...S.input,fontSize:13,padding:"8px 12px",background:q.correct===oi?`${C.gold}08`:"#fff",borderColor:q.correct===oi?C.gold:"#E8E4DD"}}/>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {!(m.questions||[]).length && <div style={{padding:24,textAlign:"center",background:"#fff",borderRadius:10,border:"1px dashed #E8E4DD"}}><p style={{color:"#9CA3AF",fontSize:13}}>No exam questions yet.</p></div>}
-              <div style={{display:"flex",gap:12,marginTop:8}}>
-                <div style={{flex:1}}><label style={{...S.label,marginBottom:5}}>Pass Score (%) *</label><input type="number" min={0} max={100} placeholder="70" value={m.passScore||""} onChange={e=>updMod(i,"passScore",e.target.value)} style={S.input}/></div>
-                <div style={{flex:1}}><label style={{...S.label,marginBottom:5}}>Time Limit (minutes)</label><input type="number" min={1} placeholder="60" value={m.timeLimit||""} onChange={e=>updMod(i,"timeLimit",e.target.value)} style={S.input}/></div>
-              </div>
-            </div>}
-
-            {/* PROJECT */}
-            {m.type==="project" && <div style={{marginBottom:10}}>
-              <label style={{...S.label,marginBottom:5}}>Project Brief / Instructions</label>
-              <textarea rows={5} placeholder="Describe the project task. What should students build or submit? Include goals, deliverables, and evaluation criteria..." value={m.content||""} onChange={e=>updMod(i,"content",e.target.value)} style={{...S.input,resize:"vertical",lineHeight:1.7,marginBottom:10}}/>
-              <label style={{...S.label,marginBottom:5}}>Submission Type</label>
-              <select value={m.submitType||"file"} onChange={e=>updMod(i,"submitType",e.target.value)} style={{...S.input,marginBottom:10}}>
-                <option value="file">File Upload</option>
-                <option value="link">URL / Link</option>
-                <option value="text">Text Response</option>
-              </select>
-              <label style={{...S.label,marginBottom:5}}>Resources / Reference Links</label>
-              <input placeholder="https://..." value={m.resources||""} onChange={e=>updMod(i,"resources",e.target.value)} style={S.input}/>
-            </div>}
-
-            {/* FREE PREVIEW + POINTS */}
-            <div style={{display:"flex",gap:16,marginTop:12,flexWrap:"wrap",alignItems:"center"}}>
-              <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,fontWeight:500,cursor:"pointer"}}>
-                <input type="checkbox" checked={m.free||false} onChange={e=>updMod(i,"free",e.target.checked)} style={{width:16,height:16}}/> Free Preview
-              </label>
-              {(m.type==="quiz"||m.type==="exam") && (
-                <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,fontWeight:500}}>
-                  <span style={{color:"#6B7280"}}>Points:</span>
-                  <input type="number" min={0} value={m.points||10} onChange={e=>updMod(i,"points",Number(e.target.value))} style={{width:70,padding:"6px 10px",border:"1.5px solid #E8E4DD",borderRadius:7,fontSize:13,outline:"none"}}/>
-                </label>
               )}
+
+              {/* ARABIC FIELDS */}
+              {(m._langTab||"en")==="ar" && (
+                <div style={{padding:16,direction:"rtl",fontFamily:"'Cairo',sans-serif"}}>
+                  <div style={{padding:"10px 14px",background:`${C.gold}08`,borderRadius:8,border:`1px solid ${C.gold}20`,marginBottom:12}}>
+                    <p style={{fontSize:12,color:C.goldD}}>💡 المحتوى العربي يُعرض للطلاب عند تفعيل اللغة العربية.</p>
+                  </div>
+                  <label style={{...S.label,textAlign:"right",display:"block",marginBottom:5}}>عنوان الدرس (عربي) *</label>
+                  <input placeholder="مثال: مقدمة إلى واجهة أوتوكاد" value={m.titleAr||""} onChange={e=>updMod(i,"titleAr",e.target.value)} style={{...S.input,marginBottom:m.type==="reading"||m.type==="project"?12:0,textAlign:"right"}}/>
+                  {m.type==="video" && <div style={{marginTop:12}}>
+                    <p style={{fontSize:12,color:"#9CA3AF",textAlign:"right"}}>رابط الفيديو مشترك بين اللغتين — لا يحتاج تكرار.</p>
+                  </div>}
+                  {m.type==="reading" && <>
+                    <label style={{...S.label,textAlign:"right",display:"block",marginBottom:5}}>محتوى القراءة (عربي)</label>
+                    <textarea rows={7} placeholder="اكتب محتوى القراءة بالعربية هنا..." value={m.contentAr||""} onChange={e=>updMod(i,"contentAr",e.target.value)} style={{...S.input,resize:"vertical",lineHeight:1.85,fontSize:14,textAlign:"right"}}/>
+                    <p style={{fontSize:11,color:"#9CA3AF",marginTop:4,textAlign:"right"}}>استخدم فواصل الأسطر للفقرات.</p>
+                  </>}
+                  {m.type==="project" && <>
+                    <label style={{...S.label,textAlign:"right",display:"block",marginBottom:5}}>وصف المشروع (عربي)</label>
+                    <textarea rows={5} placeholder="اشرح المهمة المطلوبة بالعربية..." value={m.contentAr||""} onChange={e=>updMod(i,"contentAr",e.target.value)} style={{...S.input,resize:"vertical",textAlign:"right"}}/>
+                  </>}
+                  {(m.type==="quiz"||m.type==="exam") && <>
+                    <label style={{...S.label,textAlign:"right",display:"block",marginBottom:10,marginTop:4}}>أسئلة {m.type==="exam"?"الاختبار النهائي":"الاختبار"} (عربي)</label>
+                    {(m.questions||[]).map((q,qi)=>(
+                      <div key={q.id||qi} style={{padding:14,background:"#fff",borderRadius:10,marginBottom:8,border:"1px solid #E8E4DD"}}>
+                        <span style={{fontSize:12,fontWeight:700,color:"#6B7280",display:"block",textAlign:"right",marginBottom:8}}>س{qi+1} (AR)</span>
+                        <input placeholder={`السؤال ${qi+1} بالعربية...`} value={q.textAr||""} onChange={e=>{const qs=[...(m.questions||[])];qs[qi]={...qs[qi],textAr:e.target.value};updMod(i,"questions",qs);}} style={{...S.input,marginBottom:8,fontSize:14,textAlign:"right"}}/>
+                        <div style={{display:"grid",gap:6}}>
+                          {(q.optionsAr||["","","",""]).map((opt,oi)=>(
+                            <div key={oi} style={{display:"flex",alignItems:"center",gap:8,flexDirection:"row-reverse"}}>
+                              <input type="radio" checked={q.correct===oi} readOnly style={{width:16,height:16,accentColor:C.teal,flexShrink:0}}/>
+                              <input placeholder={`الخيار ${oi+1}${q.correct===oi?" ✓":""}`} value={opt} onChange={e=>{const qs=[...(m.questions||[])];const opts=[...(qs[qi].optionsAr||["","","",""])];opts[oi]=e.target.value;qs[qi]={...qs[qi],optionsAr:opts};updMod(i,"questions",qs);}} style={{...S.input,fontSize:13,padding:"7px 12px",textAlign:"right",background:q.correct===oi?"rgba(74,124,111,0.06)":"#fff",borderColor:q.correct===oi?C.teal:"#E8E4DD"}}/>
+                            </div>
+                          ))}
+                        </div>
+                        <p style={{fontSize:11,color:"#9CA3AF",marginTop:4,textAlign:"right"}}>الإجابة الصحيحة تُحدَّد من تبويب EN</p>
+                      </div>
+                    ))}
+                    {!(m.questions||[]).length && <div style={{padding:20,textAlign:"center",background:"#fff",borderRadius:10,border:"1px dashed #E8E4DD"}}><p style={{color:"#9CA3AF",fontSize:13}}>أضف الأسئلة من تبويب EN أولاً</p></div>}
+                  </>}
+                </div>
+              )}
+
+              {/* MODULE STATUS ROW */}
+              <div style={{padding:"8px 16px",background:"#F9F8F5",borderTop:"1px solid #E8E4DD",display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
+                <span style={{fontSize:11,color:m.title?C.success:"#9CA3AF",display:"flex",alignItems:"center",gap:4}}>{m.title?"✓":"○"} EN title</span>
+                <span style={{fontSize:11,color:m.titleAr?C.success:"#9CA3AF",display:"flex",alignItems:"center",gap:4}}>{m.titleAr?"✓":"○"} AR title</span>
+                {(m.type==="reading"||m.type==="project") && <>
+                  <span style={{fontSize:11,color:m.content?C.success:"#9CA3AF"}}>{m.content?"✓":"○"} EN content</span>
+                  <span style={{fontSize:11,color:m.contentAr?C.success:"#9CA3AF"}}>{m.contentAr?"✓":"○"} AR content</span>
+                </>}
+                <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:500,cursor:"pointer",marginLeft:"auto"}}>
+                  <input type="checkbox" checked={m.free||false} onChange={e=>updMod(i,"free",e.target.checked)} style={{width:14,height:14}}/> Free Preview
+                </label>
+              </div>
             </div>
           </div>
         ))}
@@ -2637,6 +2744,138 @@ function AdminUsers({ users, addUserAdmin, updateUser, deleteUser }) {
 // ═══════════════════════════════════════════
 // ADMIN REVENUE
 // ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// ADMIN CAREERS — post jobs, view CVs
+// ═══════════════════════════════════════════
+function AdminCareers() {
+  const [jobs,     setJobs]     = useState(()=>ls("orb_jobs",[]));
+  const [apps,     setApps]     = useState(()=>ls("orb_apps",[]));
+  const [showForm, setShowForm] = useState(false);
+  const [editJob,  setEditJob]  = useState(null);
+  const [selApp,   setSelApp]   = useState(null);
+  const [tab,      setTab]      = useState("jobs");
+  const [form,     setForm]     = useState({titleEn:"",titleAr:"",deptEn:"",deptAr:"",locationEn:"",locationAr:"",typeEn:"Full-time",typeAr:"دوام كامل",descEn:"",descAr:""});
+
+  const saveJobs = v => { setJobs(v); ss("orb_jobs",v); };
+  const deleteApp = id => { const u=apps.filter(a=>a.id!==id); setApps(u); ss("orb_apps",u); };
+
+  const openNew  = () => { setForm({titleEn:"",titleAr:"",deptEn:"",deptAr:"",locationEn:"",locationAr:"",typeEn:"Full-time",typeAr:"دوام كامل",descEn:"",descAr:""}); setEditJob(null); setShowForm(true); };
+  const openEdit = j => { setForm({...j}); setEditJob(j); setShowForm(true); };
+  const handleSave = e => {
+    e.preventDefault();
+    if (editJob) saveJobs(jobs.map(j=>j.id===editJob.id?{...j,...form}:j));
+    else saveJobs([...jobs,{id:`job-${Date.now()}`,...form,createdAt:new Date().toLocaleDateString()}]);
+    setShowForm(false); setEditJob(null);
+  };
+
+  return (
+    <div style={{padding:40}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24,flexWrap:"wrap",gap:12}}>
+        <div><h1 style={S.pageTitle}>Careers</h1><p style={{...S.pageSub,marginTop:6}}>{jobs.length} open positions · {apps.length} applications received</p></div>
+        <button onClick={openNew} style={S.btnPrimary}>+ Add Position</button>
+      </div>
+
+      {/* TABS */}
+      <div style={{display:"flex",gap:4,borderBottom:"2px solid #E8E4DD",marginBottom:24}}>
+        {[["jobs","Open Positions"],["apps","Applications"]].map(([id,l])=>(
+          <button key={id} onClick={()=>setTab(id)} style={{padding:"10px 20px",fontSize:14,fontWeight:tab===id?700:500,color:tab===id?C.navy:"#6B7280",borderBottom:tab===id?`2px solid ${C.gold}`:"2px solid transparent",marginBottom:-2}}>{l}</button>
+        ))}
+      </div>
+
+      {/* OPEN POSITIONS */}
+      {tab==="jobs" && <>
+        {jobs.length>0 ? <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {jobs.map(j=>(
+            <div key={j.id} style={{background:"#fff",padding:20,borderRadius:12,border:"1px solid rgba(45,51,71,0.07)",display:"flex",alignItems:"flex-start",gap:16,flexWrap:"wrap"}}>
+              <div style={{flex:1,minWidth:200}}>
+                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:6}}>
+                  <h3 style={{fontSize:16,fontWeight:700,color:C.navy}}>{j.titleEn}</h3>
+                  <span style={{fontSize:12,color:"#9CA3AF"}}>/ {j.titleAr}</span>
+                </div>
+                <div style={{display:"flex",gap:12,fontSize:13,color:"#6B7280",flexWrap:"wrap"}}>
+                  <span>{j.deptEn}</span><span>·</span><span>{j.locationEn}</span><span>·</span>
+                  <span style={{padding:"2px 8px",background:`${C.teal}15`,color:C.teal,borderRadius:20,fontWeight:600}}>{j.typeEn}</span>
+                </div>
+                <p style={{fontSize:12,color:"#9CA3AF",marginTop:6}}>Posted {j.createdAt} · {apps.filter(a=>a.jobId===j.id).length} applications</p>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>openEdit(j)} style={{padding:"7px 14px",background:C.gold,color:"#fff",borderRadius:8,fontSize:13,fontWeight:600}}>Edit</button>
+                <button onClick={()=>saveJobs(jobs.filter(x=>x.id!==j.id))} style={{padding:"7px 14px",background:C.danger,color:"#fff",borderRadius:8,fontSize:13,fontWeight:600}}>Delete</button>
+              </div>
+            </div>
+          ))}
+        </div> : <div style={S.empty}><I.Briefcase/><h2 style={{...S.secTitle,marginTop:12}}>No Positions Yet</h2><p style={{color:"#9CA3AF",marginTop:8}}>Add your first open position</p></div>}
+      </>}
+
+      {/* APPLICATIONS */}
+      {tab==="apps" && <>
+        {apps.length>0 ? <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {apps.map(a=>(
+            <div key={a.id} style={{background:"#fff",padding:20,borderRadius:12,border:"1px solid rgba(45,51,71,0.07)",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+              <div style={{flex:1,minWidth:200}}>
+                <p style={{fontSize:15,fontWeight:700,color:C.navy}}>{a.name}</p>
+                <p style={{fontSize:13,color:"#6B7280"}}>{a.email} · Applied for: <strong>{jobs.find(j=>j.id===a.jobId)?.titleEn||"Position"}</strong></p>
+                <p style={{fontSize:12,color:"#9CA3AF",marginTop:4}}>{a.date}</p>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setSelApp(a)} style={{padding:"7px 14px",background:C.teal,color:"#fff",borderRadius:8,fontSize:13,fontWeight:600}}>View</button>
+                <button onClick={()=>deleteApp(a.id)} style={{padding:"7px 14px",background:C.danger,color:"#fff",borderRadius:8,fontSize:13,fontWeight:600}}>Delete</button>
+              </div>
+            </div>
+          ))}
+        </div> : <div style={S.empty}><I.Users/><h2 style={{...S.secTitle,marginTop:12}}>No Applications Yet</h2><p style={{color:"#9CA3AF",marginTop:8}}>Applications submitted on the Careers page will appear here</p></div>}
+      </>}
+
+      {/* ADD/EDIT FORM */}
+      {showForm && <div style={S.modalOv} onClick={()=>setShowForm(false)}><div style={{...S.modal,maxWidth:640}} onClick={e=>e.stopPropagation()}>
+        <div style={S.modalHead}><h2 style={{fontSize:18,fontWeight:700,color:C.navy}}>{editJob?"Edit Position":"Add Position"}</h2><button onClick={()=>setShowForm(false)} style={{color:"#9CA3AF"}}><I.X/></button></div>
+        <div style={{padding:28,overflowY:"auto",maxHeight:"80vh"}}>
+          <form onSubmit={handleSave}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div><label style={S.label}>Title (English) *</label><input required value={form.titleEn} onChange={e=>setForm({...form,titleEn:e.target.value})} style={S.input}/></div>
+              <div><label style={{...S.label,textAlign:"right",display:"block"}}>المسمى الوظيفي (عربي) *</label><input required value={form.titleAr} onChange={e=>setForm({...form,titleAr:e.target.value})} style={{...S.input,textAlign:"right",direction:"rtl",fontFamily:"'Cairo',sans-serif"}}/></div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div><label style={S.label}>Department (EN)</label><input value={form.deptEn} onChange={e=>setForm({...form,deptEn:e.target.value})} style={S.input}/></div>
+              <div><label style={{...S.label,textAlign:"right",display:"block"}}>القسم (AR)</label><input value={form.deptAr} onChange={e=>setForm({...form,deptAr:e.target.value})} style={{...S.input,textAlign:"right",direction:"rtl",fontFamily:"'Cairo',sans-serif"}}/></div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div><label style={S.label}>Location (EN)</label><input value={form.locationEn} onChange={e=>setForm({...form,locationEn:e.target.value})} style={S.input}/></div>
+              <div><label style={{...S.label,textAlign:"right",display:"block"}}>الموقع (AR)</label><input value={form.locationAr} onChange={e=>setForm({...form,locationAr:e.target.value})} style={{...S.input,textAlign:"right",direction:"rtl",fontFamily:"'Cairo',sans-serif"}}/></div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div><label style={S.label}>Type (EN)</label><select value={form.typeEn} onChange={e=>setForm({...form,typeEn:e.target.value})} style={S.input}><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Remote</option></select></div>
+              <div><label style={{...S.label,textAlign:"right",display:"block"}}>النوع (AR)</label><select value={form.typeAr} onChange={e=>setForm({...form,typeAr:e.target.value})} style={{...S.input,textAlign:"right",direction:"rtl",fontFamily:"'Cairo',sans-serif"}}><option>دوام كامل</option><option>دوام جزئي</option><option>عقد</option><option>عن بُعد</option></select></div>
+            </div>
+            <label style={S.label}>Job Description (English)</label>
+            <textarea rows={3} value={form.descEn} onChange={e=>setForm({...form,descEn:e.target.value})} style={{...S.input,resize:"vertical",marginBottom:12}}/>
+            <label style={{...S.label,textAlign:"right",display:"block"}}>الوصف الوظيفي (عربي)</label>
+            <textarea rows={3} value={form.descAr} onChange={e=>setForm({...form,descAr:e.target.value})} style={{...S.input,resize:"vertical",marginBottom:20,textAlign:"right",direction:"rtl",fontFamily:"'Cairo',sans-serif"}}/>
+            <div style={{display:"flex",gap:12}}>
+              <button type="button" onClick={()=>setShowForm(false)} style={{flex:1,padding:12,background:"#E8E4DD",borderRadius:10,fontWeight:600}}>Cancel</button>
+              <button type="submit" style={{flex:1,...S.btnPrimary,padding:12,justifyContent:"center"}}>{editJob?"Save Changes":"Add Position"}</button>
+            </div>
+          </form>
+        </div>
+      </div></div>}
+
+      {/* VIEW APPLICATION */}
+      {selApp && <div style={S.modalOv} onClick={()=>setSelApp(null)}><div style={{...S.modal,maxWidth:500}} onClick={e=>e.stopPropagation()}>
+        <div style={S.modalHead}><h2 style={{fontSize:18,fontWeight:700,color:C.navy}}>Application Details</h2><button onClick={()=>setSelApp(null)} style={{color:"#9CA3AF"}}><I.X/></button></div>
+        <div style={{padding:28}}>
+          {[["Name",selApp.name],["Email",selApp.email],["Phone",selApp.phone||"—"],["Position",jobs.find(j=>j.id===selApp.jobId)?.titleEn||"—"],["Applied",selApp.date],["Cover Letter",selApp.cover||"None"]].map(([l,v])=>(
+            <div key={l} style={{marginBottom:16}}>
+              <p style={{fontSize:12,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>{l}</p>
+              <p style={{fontSize:14,color:C.navy,lineHeight:1.7}}>{v}</p>
+            </div>
+          ))}
+          {selApp.cvUrl && <a href={selApp.cvUrl} download style={{...S.btnPrimary,display:"inline-flex",padding:"10px 20px",fontSize:14}}><I.Download/> Download CV</a>}
+        </div>
+      </div></div>}
+    </div>
+  );
+}
+
 function AdminRevenue({ orders }) {
   const rev = orders.reduce((s,o)=>s+o.amount,0);
   return <div style={{padding:40}}>
@@ -2765,7 +3004,7 @@ function AdminSettings() {
     </div>
 
     <div style={{background:"#fff",padding:32,borderRadius:16,border:"1px solid rgba(45,51,71,0.07)",marginBottom:24}}>
-      <h2 style={{fontSize:16,fontWeight:700,color:C.navy,marginBottom:24}}>  </h2>
+      <h2 style={{fontSize:16,fontWeight:700,color:C.navy,marginBottom:24}}>Security</h2>
       <label style={S.label}>Admin Password</label>
       <input type="password" value="••••••••••" readOnly style={{...S.input,marginBottom:12}}/>
       <button type="button" style={{fontSize:13,color:C.gold,fontWeight:600}}>Change Password</button>
@@ -2850,7 +3089,7 @@ const S = {
   modItem:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 20px",background:"#fff",borderRadius:12,border:"1px solid #F0ECE5"},
   statCard:{background:"#fff",borderRadius:16,padding:"20px 22px",border:"1px solid rgba(45,51,71,0.07)"},
   progressCard:{background:"#fff",borderRadius:16,padding:"18px 22px",border:"1px solid rgba(45,51,71,0.07)",textAlign:"left",width:"100%"},
-  authForm:{display:"flex",alignItems:"center",justifyContent:"center",padding:"40px 20px",background:C.bg,flex:1},
+  authForm:{display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"32px 20px 48px",background:C.bg,flex:1,overflowY:"auto"},
   authTitle:{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,3vw,28px)",fontWeight:700,color:C.text,marginBottom:8},
   input:{width:"100%",padding:"12px 16px",border:"1.5px solid #E8E4DD",borderRadius:10,fontSize:14,outline:"none",background:"#fff",color:C.text},
   label:{display:"block",fontSize:13,fontWeight:600,color:"#374151",marginBottom:7},
@@ -2874,6 +3113,116 @@ const S = {
 // ═══════════════════════════════════════════
 // RESPONSIVE CSS
 // ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// CHATBOT WIDGET — customer service
+// ═══════════════════════════════════════════
+function ChatbotWidget({ isRTL }) {
+  const [open,    setOpen]    = useState(false);
+  const [msgs,    setMsgs]    = useState([
+    { from:"bot", text: isRTL ? "مرحباً! 👋 كيف أستطيع مساعدتك اليوم؟" : "Hi there! 👋 How can I help you today?" }
+  ]);
+  const [input,   setInput]   = useState("");
+  const [typing,  setTyping]  = useState(false);
+  const endRef = useRef();
+
+  const quickReplies = isRTL
+    ? ["كيف أسجّل في كورس؟","ما وسائل الدفع؟","هل هناك استرداد؟","تواصل مع الدعم"]
+    : ["How do I enroll?","Payment methods?","Refund policy?","Talk to support"];
+
+  const autoReplies = isRTL ? {
+    "كيف أسجّل": "تصفح الكورسات، اختر الكورس المناسب، ثم اضغط 'اشترك الآن' واتبع خطوات الدفع الآمن.",
+    "الدفع": "نقبل البطاقات الائتمانية، Apple Pay، STC Pay، وAmazon Pay. جميع الأسعار تشمل ضريبة القيمة المضافة 15%.",
+    "استرداد": "نقدم ضمان استرداد كامل خلال 7 أيام من الشراء دون أي شروط.",
+    "دعم": "يمكنك التواصل مع فريقنا على support@orbit.sa — الأحد إلى الخميس، 9ص–6م.",
+  } : {
+    "enroll": "Browse courses, choose the right one, then click 'Enroll Now' and follow the secure payment steps.",
+    "payment": "We accept credit cards, Apple Pay, STC Pay, and Amazon Pay. All prices include 15% VAT.",
+    "refund": "We offer a full 7-day money-back guarantee, no questions asked.",
+    "support": "You can reach our team at support@orbit.sa — Sunday to Thursday, 9am–6pm.",
+  };
+
+  const sendMsg = (text) => {
+    if (!text.trim()) return;
+    const newMsgs = [...msgs, {from:"user", text}];
+    setMsgs(newMsgs);
+    setInput("");
+    setTyping(true);
+    setTimeout(()=>{
+      const lower = text.toLowerCase();
+      let reply = isRTL ? "شكراً لرسالتك! سيتواصل معك فريق الدعم قريباً على support@orbit.sa" : "Thanks for your message! Our support team will reach you soon at support@orbit.sa";
+      for (const [key, val] of Object.entries(autoReplies)) {
+        if (lower.includes(key)) { reply = val; break; }
+      }
+      setMsgs(p=>[...p,{from:"bot",text:reply}]);
+      setTyping(false);
+    }, 800);
+  };
+
+  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:"smooth"}); },[msgs, typing]);
+
+  return (
+    <div style={{position:"fixed",bottom:24,right:isRTL?undefined:24,left:isRTL?24:undefined,zIndex:999}}>
+      {/* CHAT WINDOW */}
+      {open && (
+        <div style={{width:340,background:"#fff",borderRadius:20,boxShadow:"0 8px 40px rgba(45,51,71,0.18)",border:"1px solid rgba(45,51,71,0.08)",marginBottom:12,overflow:"hidden",direction:isRTL?"rtl":"ltr",fontFamily:isRTL?"'Cairo',sans-serif":"'DM Sans',sans-serif"}}>
+          {/* HEADER */}
+          <div style={{background:C.navy,padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:36,height:36,borderRadius:"50%",background:C.gold,display:"flex",alignItems:"center",justifyContent:"center"}}><OrbitLogo size={22} light/></div>
+              <div>
+                <p style={{fontSize:14,fontWeight:700,color:C.cream}}>Orbit Support</p>
+                <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:6,height:6,borderRadius:"50%",background:"#4ADE80"}}/><p style={{fontSize:11,color:"rgba(213,207,193,0.7)"}}>{isRTL?"متصل الآن":"Online now"}</p></div>
+              </div>
+            </div>
+            <button onClick={()=>setOpen(false)} style={{color:"rgba(213,207,193,0.7)",display:"flex"}}><I.X/></button>
+          </div>
+
+          {/* MESSAGES */}
+          <div style={{height:280,overflowY:"auto",padding:"16px 16px 8px"}}>
+            {msgs.map((m,i)=>(
+              <div key={i} style={{marginBottom:12,display:"flex",justifyContent:m.from==="user"?"flex-end":"flex-start"}}>
+                <div style={{maxWidth:"82%",padding:"10px 14px",borderRadius:m.from==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.from==="user"?C.gold:"#F5F2ED",color:m.from==="user"?"#fff":C.navy,fontSize:13,lineHeight:1.6,textAlign:isRTL?"right":"left"}}>
+                  {m.text}
+                </div>
+              </div>
+            ))}
+            {typing && <div style={{display:"flex",gap:4,padding:"8px 14px",background:"#F5F2ED",borderRadius:"16px 16px 16px 4px",width:"fit-content",marginBottom:12}}>
+              {[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:"#9CA3AF",animation:`bounce 1s ${i*0.2}s infinite`}}/>)}
+            </div>}
+            <div ref={endRef}/>
+          </div>
+
+          {/* QUICK REPLIES */}
+          <div style={{padding:"0 12px 8px",display:"flex",flexWrap:"wrap",gap:6}}>
+            {quickReplies.map((q,i)=><button key={i} onClick={()=>sendMsg(q)} style={{padding:"5px 12px",background:"#F0ECE5",borderRadius:20,fontSize:11,fontWeight:600,color:C.navy}}>{q}</button>)}
+          </div>
+
+          {/* INPUT */}
+          <div style={{padding:"8px 12px 14px",display:"flex",gap:8}}>
+            <input
+              value={input}
+              onChange={e=>setInput(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&sendMsg(input)}
+              placeholder={isRTL?"اكتب رسالتك...":"Type your message..."}
+              style={{...S.input,fontSize:13,padding:"10px 14px",flex:1,textAlign:isRTL?"right":"left"}}
+            />
+            <button onClick={()=>sendMsg(input)} style={{width:38,height:38,borderRadius:10,background:C.gold,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* TOGGLE BUTTON */}
+      <button onClick={()=>setOpen(!open)} style={{width:56,height:56,borderRadius:"50%",background:open?C.navy:C.gold,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 16px rgba(184,150,90,0.35)",transition:"all 0.2s",marginLeft:isRTL?0:"auto",marginRight:isRTL?"auto":0}}>
+        {open ? <I.X/> : <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>}
+      </button>
+
+      <style>{`@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}`}</style>
+    </div>
+  );
+}
+
 const CSS = `
 *{margin:0;padding:0;box-sizing:border-box}
 button{background:none;border:none;cursor:pointer;font:inherit;line-height:1}
@@ -2890,7 +3239,7 @@ body{-webkit-text-size-adjust:100%}
 .grid-3{display:grid;grid-template-columns:1fr;gap:16px}
 .grid-4{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
 .grid-4s{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-.auth-split{display:flex;flex-direction:column}
+.auth-split{display:flex;flex-direction:column;min-height:100%}
 .name-grid{display:grid;grid-template-columns:1fr;gap:12px}
 .form-grid-2{display:grid;grid-template-columns:1fr;gap:12px}
 .filter-row{display:flex;flex-wrap:wrap;gap:10px}
