@@ -41,7 +41,7 @@ const Price = ({ value, size=18, bold=800, color }) => (
 const PATTERN_TYPES = ["circles","grid","bars","waves","dots","diagonal"];
 const CATEGORIES    = ["Design Foundations","Interior Design Principles","Color Theory","AutoCAD","SketchUp","3ds Max & V-Ray","Revit","Lumion","Architectural Photography","Portfolio Building","Professional Presentation","Freelancing","Project Management","Client Communication","Sustainability"];
 const LEVELS        = ["Beginner","Intermediate","Advanced"];
-const ROLES         = ["student","instructor","moderator"];
+const ROLES         = ["student","instructor","moderator","customer_service"];
 const MONTHS        = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 // ═══════════════════════════════════════════
@@ -322,10 +322,11 @@ const I = {
 // ROLE BADGE
 // ═══════════════════════════════════════════
 const roleMeta = {
-  admin:      { color:"#7C3AED", bg:"#EDE9FE", label:"Admin" },
-  instructor: { color:C.teal,   bg:`${C.teal}18`, label:"Instructor" },
-  student:    { color:C.navy,   bg:C.creamL, label:"Student" },
-  moderator:  { color:C.slate,  bg:`${C.slate}18`, label:"Moderator" },
+  admin:            { color:"#7C3AED", bg:"#EDE9FE",      label:"Admin" },
+  instructor:       { color:C.teal,   bg:`${C.teal}18`,   label:"Instructor" },
+  student:          { color:C.navy,   bg:C.creamL,        label:"Student" },
+  moderator:        { color:C.slate,  bg:`${C.slate}18`,  label:"Moderator" },
+  customer_service: { color:"#D97706", bg:"#FEF3C7",      label:"Customer Service" },
 };
 const RoleBadge = ({ role }) => {
   const m = roleMeta[role] || roleMeta.student;
@@ -348,7 +349,7 @@ export default function App() {
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [catFilter,  setCatFilter]  = useState("All");
   const [lang,       setLang]       = useState(()=>ls("orb_lang","en"));
-  const [siteName,   setSiteNameApp] = useState(()=>ls("orb_siteName","Orbit Learning Platform"));
+  const [siteName,   setSiteNameApp] = useState(()=>ls("orb_siteName","Orbit Learning"));
 
   const t   = T[lang] || T.en;
   const isRTL = lang === "ar";
@@ -578,7 +579,7 @@ export default function App() {
     link.href = faviconUrl;
 
     // Set page title
-    document.title = ls("orb_siteName","Orbit Learning Platform");
+    document.title = ls("orb_siteName","Orbit Learning");
   },[]);
 
   const isAuth = page==="login"||page==="signup";
@@ -684,8 +685,21 @@ export default function App() {
                       {t.footer.subscribe}
                     </button>
                   </div>
-                  <div style={{display:"flex",gap:10,marginTop:16}}>
-                    {["𝕏","in","f"].map(s=><div key={s} style={{width:34,height:34,borderRadius:8,background:"rgba(213,207,193,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:C.cream,cursor:"pointer"}}>{s}</div>)}
+                  <div style={{display:"flex",gap:8,marginTop:16,flexWrap:"wrap"}}>
+                    {[
+                      {url:"https://discord.gg/k7UnRQGKvT",          t:"Discord",   d:"M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.015.043.032.056a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"},
+                      {url:"https://t.me/Satur_n0",                   t:"Telegram",  d:"M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"},
+                      {url:"https://www.snapchat.com/@saturns202",    t:"Snapchat",  d:"M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738.118.15.148.351.083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12.017 24c6.624 0 11.99-5.367 11.99-11.988C24.007 5.367 18.641 0 12.017 0z"},
+                      {url:"https://www.threads.com/@2saturns0",      t:"Threads",   d:"M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.5 12.068v-.034c.024-3.516.926-6.368 2.68-8.478C6.001 1.238 8.7.022 12.219 0h.073c2.648.017 5.041.791 6.752 2.184 1.656 1.348 2.559 3.23 2.608 5.448l.005.196h-3.16l-.005-.196c-.058-1.357-.512-2.367-1.387-3.085-1.01-.832-2.498-1.265-4.264-1.278-2.57.016-4.507.825-5.763 2.405-1.15 1.44-1.736 3.617-1.75 6.465v.034c.014 2.848.6 5.025 1.75 6.465 1.256 1.58 3.193 2.389 5.763 2.405 1.966-.013 3.282-.405 4.27-1.277.992-.875 1.487-2.151 1.487-3.83V15h-5.6v-2.871h8.76v3.747c0 2.578-.719 4.572-2.135 5.927C18.028 23.196 15.435 24 12.186 24z"},
+                      {url:"https://api.whatsapp.com/message/EQYMUTLCLKWIE1?autoload=1&app_absent=0",t:"WhatsApp",d:"M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"},
+                      {url:"https://www.tiktok.com/@2saturns0",       t:"TikTok",    d:"M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"},
+                      {url:"https://www.instagram.com/2saturns0",     t:"Instagram", d:"M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"},
+                    ].map(s=>(
+                      <a key={s.t} href={s.url} target="_blank" rel="noopener noreferrer" title={s.t}
+                        style={{width:34,height:34,borderRadius:8,background:"rgba(213,207,193,0.08)",display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none",color:"rgba(213,207,193,0.75)",flexShrink:0}}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d={s.d}/></svg>
+                      </a>
+                    ))}
                   </div>
                 </div>
 
@@ -1629,6 +1643,26 @@ function SocialLoginBtn({ provider, label, onClick }) {
 function LoginPage({ nav, login, t, isRTL, onSocial }) {
   const [f,setF]   = useState({email:"",password:""});
   const [err,setErr] = useState("");
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSent,  setForgotSent]  = useState(false);
+
+  const [tempPwShown, setTempPwShown] = useState("");
+
+  const handleForgot = (e) => {
+    e.preventDefault();
+    const users = ls("orb_users",[]);
+    const found  = users.find(u=>u.email===forgotEmail.toLowerCase().trim());
+    const chars  = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#";
+    const tempPw = Array.from({length:10},()=>chars[Math.floor(Math.random()*chars.length)]).join("");
+    if (found) {
+      const updated = users.map(u=>u.email===found.email?{...u,password:tempPw}:u);
+      ss("orb_users",updated);
+      setTempPwShown(tempPw); // Show temp password so user can log in
+    }
+    setForgotSent(true); // Always show same success screen
+  };
+
   const go = e => {
     e.preventDefault(); setErr("");
     const result = login(f.email, f.password);
@@ -1657,7 +1691,7 @@ function LoginPage({ nav, login, t, isRTL, onSocial }) {
               <label style={{...S.label,textAlign:isRTL?"right":"left",display:"block"}}>{t.login.password}</label>
               <input required type="password" autoComplete="current-password" placeholder={isRTL?"كلمة المرور":"Your password"} value={f.password} onChange={e=>setF({...f,password:e.target.value})} style={{...S.input,textAlign:isRTL?"right":"left"}}/>
               <div style={{textAlign:isRTL?"left":"right",margin:"8px 0 20px"}}>
-                <button type="button" style={{fontSize:13,color:C.gold,fontWeight:600}}>{t.login.forgot}</button>
+                <button type="button" onClick={()=>{setShowForgot(true);setForgotSent(false);setForgotEmail("");}} style={{fontSize:13,color:C.gold,fontWeight:600}}>{t.login.forgot}</button>
               </div>
               <button type="submit" style={{...S.btnPrimary,width:"100%",justifyContent:"center",marginBottom:16,padding:"15px 0",fontSize:15}}>{t.login.btn}</button>
             </form>
@@ -1670,6 +1704,65 @@ function LoginPage({ nav, login, t, isRTL, onSocial }) {
           </div>
         </div>
       </div>
+
+      {/* FORGOT PASSWORD MODAL */}
+      {showForgot && (
+        <div style={S.modalOv} onClick={()=>setShowForgot(false)}>
+          <div style={{...S.modal,maxWidth:420}} onClick={e=>e.stopPropagation()}>
+            <div style={S.modalHead}>
+              <h2 style={{fontSize:18,fontWeight:700,color:C.navy}}>{isRTL?"إعادة تعيين كلمة المرور":"Reset Password"}</h2>
+              <button onClick={()=>setShowForgot(false)} style={{color:"#9CA3AF"}}><I.X/></button>
+            </div>
+            <div style={{padding:28}}>
+              {forgotSent ? (
+                <div style={{textAlign:"center",padding:"16px 0"}}>
+                  <div style={{fontSize:40,marginBottom:16}}>🔐</div>
+                  <h3 style={{fontSize:17,fontWeight:700,color:C.navy,marginBottom:10}}>
+                    {isRTL?"تم إعادة تعيين كلمة المرور":"Password Reset Done"}
+                  </h3>
+                  <p style={{fontSize:14,color:"#6B7280",lineHeight:1.8,marginBottom:20}}>
+                    {isRTL
+                      ? "إذا كان هذا البريد الإلكتروني مسجّلاً لدينا، ستجد أدناه كلمة مرور مؤقتة. سجّل الدخول بها ثم غيّرها من إعدادات حسابك."
+                      : "If this email is registered with us, your temporary password is shown below. Use it to sign in, then change it from your account settings."}
+                  </p>
+                  {tempPwShown && (
+                    <div style={{background:C.bg,border:`1.5px solid ${C.gold}`,borderRadius:12,padding:"14px 20px",marginBottom:20}}>
+                      <p style={{fontSize:12,color:"#9CA3AF",marginBottom:6}}>{isRTL?"كلمة المرور المؤقتة:":"Temporary Password:"}</p>
+                      <p style={{fontSize:18,fontWeight:700,color:C.navy,letterSpacing:2,fontFamily:"monospace"}}>{tempPwShown}</p>
+                      <button onClick={()=>navigator.clipboard?.writeText(tempPwShown)} style={{fontSize:12,color:C.teal,fontWeight:600,marginTop:6}}>
+                        {isRTL?"نسخ":"Copy"}
+                      </button>
+                    </div>
+                  )}
+                  <button onClick={()=>setShowForgot(false)} style={{...S.btnPrimary,margin:"0 auto",padding:"10px 28px",fontSize:14}}>
+                    {isRTL?"العودة لتسجيل الدخول":"Back to Sign In"}
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleForgot}>
+                  <p style={{fontSize:14,color:"#6B7280",marginBottom:20,lineHeight:1.7,textAlign:isRTL?"right":"left"}}>
+                    {isRTL
+                      ? "أدخل بريدك الإلكتروني وسنرسل لك كلمة مرور مؤقتة."
+                      : "Enter your email address and we'll send you a temporary password."}
+                  </p>
+                  <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.login.email}</label>
+                  <input
+                    required type="email"
+                    value={forgotEmail}
+                    onChange={e=>setForgotEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    style={{...S.input,marginBottom:20,textAlign:isRTL?"right":"left"}}
+                    autoFocus
+                  />
+                  <button type="submit" style={{...S.btnPrimary,width:"100%",justifyContent:"center",padding:"13px 0"}}>
+                    {isRTL?"إرسال كلمة المرور المؤقتة":"Send Temporary Password"}
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1837,11 +1930,20 @@ function CareersPage({ nav, t }) {
   const handleApply = (e) => {
     e.preventDefault(); setErr("");
     if (!form.name||!form.email) { setErr(isRTL?"الرجاء إدخال الاسم والبريد الإلكتروني":"Please fill name and email"); return; }
-    // Save application
-    const app = { id:`app-${Date.now()}`, jobId:selJob.id, name:form.name, email:form.email, phone:form.phone, cover:form.cover, cvName:cvFile?.name||"", date:new Date().toLocaleDateString() };
-    const apps = ls("orb_apps",[]);
-    ss("orb_apps",[...apps,app]);
-    setSuccess(true);
+    // Save application — read CV as base64 so admin can download it
+    const saveApp = (cvDataUrl) => {
+      const app = { id:`app-${Date.now()}`, jobId:selJob.id, name:form.name, email:form.email, phone:form.phone, cover:form.cover, cvName:cvFile?.name||"", cvUrl:cvDataUrl||"", date:new Date().toLocaleDateString() };
+      const existing = ls("orb_apps",[]);
+      ss("orb_apps",[...existing,app]);
+      setSuccess(true);
+    };
+    if (cvFile) {
+      const reader = new FileReader();
+      reader.onload = e => saveApp(e.target.result);
+      reader.readAsDataURL(cvFile);
+    } else {
+      saveApp("");
+    }
   };
 
   return (
@@ -1938,8 +2040,8 @@ function HelpPage({ nav, t }) {
     {q:"Do courses expire?",                   a:"No. Once enrolled, you have lifetime access to the course content including any future updates."},
   ];
   const contacts = isRTL
-    ? [{icon:"✉️",l:"البريد الإلكتروني",v:" linkybinky9@gmail.com"},{icon:"💬",l:"الدردشة المباشرة",v:"متاح داخل التطبيق"}]
-    : [{icon:"✉️",l:"Email",v:" linkybinky9@gmail.com"},{icon:"💬",l:"Live Chat",v:"Available in-app"}];
+    ? [{icon:"✉️",l:"البريد الإلكتروني",v:"support@orbit.sa"},{icon:"💬",l:"الدردشة المباشرة",v:"متاح داخل التطبيق"}]
+    : [{icon:"✉️",l:"Email",v:"support@orbit.sa"},{icon:"💬",l:"Live Chat",v:"Available in-app"}];
   return (
     <StaticPage title={isRTL?"مركز المساعدة":"Help Center"} isRTL={isRTL}>
       <div style={{background:"#fff",borderRadius:20,padding:40,border:"1px solid rgba(45,51,71,0.07)",marginBottom:32}}>
@@ -1989,14 +2091,14 @@ function PrivacyPage({ nav, t }) {
     {h:"كيف نستخدم معلوماتك",           b:"تُستخدم بياناتك لتقديم خدماتنا، ومعالجة المدفوعات، وإرسال تحديثات الكورسات، وتحسين تجربة المنصة."},
     {h:"مشاركة البيانات",               b:"لا نبيع بياناتك الشخصية. نشارك البيانات فقط مع معالجي الدفع ومزودي الخدمات اللازمين لتقديم خدماتنا."},
     {h:"الاحتفاظ بالبيانات",            b:"نحتفظ ببياناتك طالما حسابك نشط. يمكنك طلب الحذف في أي وقت عبر التواصل مع الدعم."},
-    {h:"حقوقك",                         b:"لديك الحق في الوصول إلى بياناتك الشخصية وتصحيحها أو حذفها. تواصل معنا على  linkybinky9@gmail.com لأي طلبات."},
+    {h:"حقوقك",                         b:"لديك الحق في الوصول إلى بياناتك الشخصية وتصحيحها أو حذفها. تواصل معنا على support@orbit.sa لأي طلبات."},
     {h:"الأمان",                         b:"نستخدم تشفير SSL بقوة 256 بت ونتبع أفضل ممارسات الصناعة لحماية معلوماتك."},
   ] : [
     {h:"Information We Collect",        b:"We collect information you provide directly (name, email, payment info) and usage data to improve our platform."},
     {h:"How We Use Your Information",   b:"Your data is used to provide our services, process payments, send course updates, and improve the platform experience."},
     {h:"Data Sharing",                  b:"We do not sell your personal data. We share data only with payment processors and service providers necessary to deliver our services."},
     {h:"Data Retention",                b:"We retain your data as long as your account is active. You may request deletion at any time by contacting support."},
-    {h:"Your Rights",                   b:"You have the right to access, correct, or delete your personal data. Contact  linkybinky9@gmail.com for any data requests."},
+    {h:"Your Rights",                   b:"You have the right to access, correct, or delete your personal data. Contact support@orbit.sa for any data requests."},
     {h:"Security",                      b:"We use 256-bit SSL encryption and follow industry best practices to protect your information."},
   ];
   return (
@@ -2718,7 +2820,7 @@ function AdminUsers({ users, addUserAdmin, updateUser, deleteUser }) {
           <input type="password" required={!editUser} value={form.password} onChange={e=>setForm({...form,password:e.target.value})} style={{...S.input,marginBottom:16}}/>
           <label style={S.label}>Role</label>
           <select value={form.role} onChange={e=>setForm({...form,role:e.target.value})} style={{...S.input,marginBottom:24}}>
-            {["student","instructor","moderator"].map(r=><option key={r} value={r}>{r[0].toUpperCase()+r.slice(1)}</option>)}
+            {["student","instructor","moderator","customer_service"].map(r=><option key={r} value={r}>{r==="customer_service"?"Customer Service":r[0].toUpperCase()+r.slice(1)}</option>)}
           </select>
           {/* ROLE PREVIEW */}
           <div style={{padding:16,background:C.bg,borderRadius:12,marginBottom:24,display:"flex",alignItems:"center",gap:12}}>
@@ -2728,6 +2830,7 @@ function AdminUsers({ users, addUserAdmin, updateUser, deleteUser }) {
               {form.role==="student"    && " Can browse and enroll in courses."}
               {form.role==="instructor" && " Can create and manage courses assigned to them."}
               {form.role==="moderator"  && " Can review content and manage users."}
+              {form.role==="customer_service" && " Can view and respond to customer inquiries in the chatbot."}
             </div>
           </div>
           <div style={{display:"flex",gap:12}}>
@@ -2757,7 +2860,19 @@ function AdminCareers() {
   const [tab,      setTab]      = useState("jobs");
   const [form,     setForm]     = useState({titleEn:"",titleAr:"",deptEn:"",deptAr:"",locationEn:"",locationAr:"",typeEn:"Full-time",typeAr:"دوام كامل",descEn:"",descAr:""});
 
-  const saveJobs = v => { setJobs(v); ss("orb_jobs",v); };
+  // Always reload fresh from localStorage
+  const reloadApps = () => setApps(ls("orb_apps",[]));
+  useEffect(()=>{
+    reloadApps();
+    document.addEventListener("visibilitychange", reloadApps);
+    window.addEventListener("focus", reloadApps);
+    return ()=>{ document.removeEventListener("visibilitychange",reloadApps); window.removeEventListener("focus",reloadApps); };
+  },[]);
+
+  // Reload every time user switches to Applications tab
+  const switchTab = (t) => { if(t==="apps") reloadApps(); setTab(t); };
+
+  const saveJobs  = v => { setJobs(v); ss("orb_jobs",v); };
   const deleteApp = id => { const u=apps.filter(a=>a.id!==id); setApps(u); ss("orb_apps",u); };
 
   const openNew  = () => { setForm({titleEn:"",titleAr:"",deptEn:"",deptAr:"",locationEn:"",locationAr:"",typeEn:"Full-time",typeAr:"دوام كامل",descEn:"",descAr:""}); setEditJob(null); setShowForm(true); };
@@ -2778,9 +2893,10 @@ function AdminCareers() {
 
       {/* TABS */}
       <div style={{display:"flex",gap:4,borderBottom:"2px solid #E8E4DD",marginBottom:24}}>
-        {[["jobs","Open Positions"],["apps","Applications"]].map(([id,l])=>(
-          <button key={id} onClick={()=>setTab(id)} style={{padding:"10px 20px",fontSize:14,fontWeight:tab===id?700:500,color:tab===id?C.navy:"#6B7280",borderBottom:tab===id?`2px solid ${C.gold}`:"2px solid transparent",marginBottom:-2}}>{l}</button>
+        {[["jobs",`Open Positions (${jobs.length})`],["apps",`Applications (${apps.length})`]].map(([id,l])=>(
+          <button key={id} onClick={()=>switchTab(id)} style={{padding:"10px 20px",fontSize:14,fontWeight:tab===id?700:500,color:tab===id?C.navy:"#6B7280",borderBottom:tab===id?`2px solid ${C.gold}`:"2px solid transparent",marginBottom:-2}}>{l}</button>
         ))}
+        <button onClick={reloadApps} style={{marginLeft:"auto",fontSize:12,color:C.teal,fontWeight:600,padding:"8px 14px",background:`${C.teal}10`,borderRadius:8}}>↻ Refresh</button>
       </div>
 
       {/* OPEN POSITIONS */}
@@ -2864,13 +2980,33 @@ function AdminCareers() {
       {selApp && <div style={S.modalOv} onClick={()=>setSelApp(null)}><div style={{...S.modal,maxWidth:500}} onClick={e=>e.stopPropagation()}>
         <div style={S.modalHead}><h2 style={{fontSize:18,fontWeight:700,color:C.navy}}>Application Details</h2><button onClick={()=>setSelApp(null)} style={{color:"#9CA3AF"}}><I.X/></button></div>
         <div style={{padding:28}}>
-          {[["Name",selApp.name],["Email",selApp.email],["Phone",selApp.phone||"—"],["Position",jobs.find(j=>j.id===selApp.jobId)?.titleEn||"—"],["Applied",selApp.date],["Cover Letter",selApp.cover||"None"]].map(([l,v])=>(
-            <div key={l} style={{marginBottom:16}}>
-              <p style={{fontSize:12,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>{l}</p>
-              <p style={{fontSize:14,color:C.navy,lineHeight:1.7}}>{v}</p>
+          {[["Full Name",selApp.name],["Email",selApp.email],["Phone",selApp.phone||"—"],["Position",jobs.find(j=>j.id===selApp.jobId)?.titleEn||"—"],["Date Applied",selApp.date]].map(([l,v])=>(
+            <div key={l} style={{marginBottom:14,paddingBottom:14,borderBottom:"1px solid #F0ECE5"}}>
+              <p style={{fontSize:11,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>{l}</p>
+              <p style={{fontSize:14,color:C.navy}}>{v}</p>
             </div>
           ))}
-          {selApp.cvUrl && <a href={selApp.cvUrl} download style={{...S.btnPrimary,display:"inline-flex",padding:"10px 20px",fontSize:14}}><I.Download/> Download CV</a>}
+          {selApp.cover && <div style={{marginBottom:14,paddingBottom:14,borderBottom:"1px solid #F0ECE5"}}>
+            <p style={{fontSize:11,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Cover Letter</p>
+            <p style={{fontSize:14,color:"#4A5568",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{selApp.cover}</p>
+          </div>}
+          <div style={{marginBottom:20}}>
+            <p style={{fontSize:11,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>CV / Resume</p>
+            {selApp.cvUrl && selApp.cvUrl.startsWith("data:") ? (
+              <a href={selApp.cvUrl} download={selApp.cvName||"cv.pdf"}
+                style={{...S.btnPrimary,display:"inline-flex",padding:"10px 20px",fontSize:14,gap:8,textDecoration:"none"}}>
+                <I.Download/> Download CV {selApp.cvName ? `(${selApp.cvName})` : ""}
+              </a>
+            ) : selApp.cvName ? (
+              <div style={{padding:12,background:C.bg,borderRadius:8,border:"1px solid #E8E4DD"}}>
+                <p style={{fontSize:13,color:"#6B7280"}}>📄 {selApp.cvName}</p>
+                <p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>File was uploaded but could not be saved as downloadable. Ask applicant to re-submit.</p>
+              </div>
+            ) : (
+              <p style={{fontSize:13,color:"#9CA3AF"}}>No CV uploaded</p>
+            )}
+          </div>
+          <button onClick={()=>{deleteApp(selApp.id);setSelApp(null);}} style={{fontSize:13,color:C.danger,fontWeight:600,padding:"8px 16px",background:C.dangerBg,borderRadius:8}}>🗑 Delete Application</button>
         </div>
       </div></div>}
     </div>
@@ -2908,7 +3044,7 @@ function AdminRevenue({ orders }) {
 // ADMIN SETTINGS
 // ═══════════════════════════════════════════
 function AdminSettings({ onSiteNameChange }) {
-  const [siteName,  setSiteName]  = useState(()=>ls("orb_siteName","Orbit Learning Platform"));
+  const [siteName,  setSiteName]  = useState(()=>ls("orb_siteName","Orbit Learning"));
   const [vat,       setVat]       = useState(()=>ls("orb_vat","15"));
   const [amazonId,  setAmazonId]  = useState(()=>ls("orb_amazonId",""));
   const [saved,     setSaved]     = useState(false);
@@ -3135,12 +3271,12 @@ function ChatbotWidget({ isRTL }) {
     "كيف أسجّل": "تصفح الكورسات، اختر الكورس المناسب، ثم اضغط 'اشترك الآن' واتبع خطوات الدفع الآمن.",
     "الدفع": "نقبل البطاقات الائتمانية، Apple Pay، STC Pay، وAmazon Pay. جميع الأسعار تشمل ضريبة القيمة المضافة 15%.",
     "استرداد": "نقدم ضمان استرداد كامل خلال 7 أيام من الشراء دون أي شروط.",
-    "دعم": "يمكنك التواصل مع فريقنا على  linkybinky9@gmail.com — الأحد إلى الخميس، 9ص–6م.",
+    "دعم": "يمكنك التواصل مع فريقنا على support@orbit.sa — الأحد إلى الخميس، 9ص–6م.",
   } : {
     "enroll": "Browse courses, choose the right one, then click 'Enroll Now' and follow the secure payment steps.",
     "payment": "We accept credit cards, Apple Pay, STC Pay, and Amazon Pay. All prices include 15% VAT.",
     "refund": "We offer a full 7-day money-back guarantee, no questions asked.",
-    "support": "You can reach our team at  linkybinky9@gmail.com — Sunday to Thursday, 9am–6pm.",
+    "support": "You can reach our team at support@orbit.sa — Sunday to Thursday, 9am–6pm.",
   };
 
   const sendMsg = (text) => {
@@ -3151,7 +3287,7 @@ function ChatbotWidget({ isRTL }) {
     setTyping(true);
     setTimeout(()=>{
       const lower = text.toLowerCase();
-      let reply = isRTL ? "شكراً لرسالتك! سيتواصل معك فريق الدعم قريباً على  linkybinky9@gmail.com" : "Thanks for your message! Our support team will reach you soon at  linkybinky9@gmail.com";
+      let reply = isRTL ? "شكراً لرسالتك! سيتواصل معك فريق الدعم قريباً على support@orbit.sa" : "Thanks for your message! Our support team will reach you soon at support@orbit.sa";
       for (const [key, val] of Object.entries(autoReplies)) {
         if (lower.includes(key)) { reply = val; break; }
       }
