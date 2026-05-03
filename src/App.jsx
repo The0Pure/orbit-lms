@@ -1943,7 +1943,10 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
   const go = async (e) => {
     e.preventDefault(); setErr("");
     if (!f.phone.trim())            { setErr(isRTL?"رقم الجوال مطلوب":"Mobile number is required"); return; }
-    if (f.password.length < 8)      { setErr(isRTL?"كلمة المرور يجب أن تكون 8 أحرف على الأقل":"Password must be at least 8 characters"); return; }
+    if (f.password.length < 8)           { setErr(isRTL?"كلمة المرور يجب أن تكون 8 أحرف على الأقل":"Password must be at least 8 characters"); return; }
+    if (!/[A-Z]/.test(f.password))       { setErr(isRTL?"يجب أن تحتوي كلمة المرور على حرف كبير واحد على الأقل":"Password must contain at least one uppercase letter"); return; }
+    if (!/[a-z]/.test(f.password))       { setErr(isRTL?"يجب أن تحتوي كلمة المرور على حرف صغير واحد على الأقل":"Password must contain at least one lowercase letter"); return; }
+    if (!/[0-9]/.test(f.password))       { setErr(isRTL?"يجب أن تحتوي كلمة المرور على رقم واحد على الأقل":"Password must contain at least one number"); return; }
     if (f.password !== f.confirm)   { setErr(isRTL?"كلمتا المرور غير متطابقتين":"Passwords do not match"); return; }
     setLoading(true);
     const result = await signup(f);
@@ -2055,10 +2058,56 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
 
               {/* PASSWORD */}
               <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.password} *</label>
-              <input required type="password" autoComplete="new-password" placeholder={isRTL?"8 أحرف على الأقل":"Min. 8 characters"}
+              <input required type="password" autoComplete="new-password" placeholder={isRTL?"أدخل كلمة المرور":"Enter your password"}
                 value={f.password} onChange={e=>setF({...f,password:e.target.value})}
-                style={{...S.input,marginBottom:14,textAlign:isRTL?"right":"left",
-                  borderColor: f.password && f.confirm && f.password!==f.confirm ? C.danger : "#E8E4DD"}}/>
+                style={{...S.input,marginBottom:10,textAlign:isRTL?"right":"left",
+                  borderColor: f.password
+                    ? (()=>{ const r=[f.password.length>=8,/[A-Z]/.test(f.password),/[a-z]/.test(f.password),/[0-9]/.test(f.password)]; const passed=r.filter(Boolean).length; return passed===4?C.success:passed>=2?"#F59E0B":C.danger; })()
+                    : "#E8E4DD"}}/>
+
+              {/* PASSWORD STRENGTH METER + RULES */}
+              {f.password && (()=>{
+                const rules = [
+                  { test: f.password.length>=8,          en:"At least 8 characters",     ar:"8 أحرف على الأقل" },
+                  { test: /[A-Z]/.test(f.password),      en:"One uppercase letter (A-Z)", ar:"حرف كبير واحد (A-Z)" },
+                  { test: /[a-z]/.test(f.password),      en:"One lowercase letter (a-z)", ar:"حرف صغير واحد (a-z)" },
+                  { test: /[0-9]/.test(f.password),      en:"One number (0-9)",           ar:"رقم واحد (0-9)" },
+                ];
+                const passed  = rules.filter(r=>r.test).length;
+                const strength = passed<=1?"weak":passed===2?"fair":passed===3?"good":"strong";
+                const colors   = {weak:C.danger, fair:"#F59E0B", good:"#3B82F6", strong:C.success};
+                const labels   = {
+                  weak:  {en:"Weak",   ar:"ضعيفة"},
+                  fair:  {en:"Fair",   ar:"مقبولة"},
+                  good:  {en:"Good",   ar:"جيدة"},
+                  strong:{en:"Strong", ar:"قوية"},
+                };
+                const col = colors[strength];
+                return (
+                  <div style={{marginBottom:14}}>
+                    {/* Strength bar */}
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                      <div style={{flex:1,display:"flex",gap:3}}>
+                        {[1,2,3,4].map(i=>(
+                          <div key={i} style={{flex:1,height:4,borderRadius:4,background:i<=passed?col:"#E8E4DD",transition:"background 0.2s"}}/>
+                        ))}
+                      </div>
+                      <span style={{fontSize:12,fontWeight:700,color:col,minWidth:40,textAlign:isRTL?"left":"right"}}>
+                        {isRTL?labels[strength].ar:labels[strength].en}
+                      </span>
+                    </div>
+                    {/* Rules checklist */}
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 12px"}}>
+                      {rules.map((r,i)=>(
+                        <div key={i} style={{display:"flex",alignItems:"center",gap:5,flexDirection:isRTL?"row-reverse":"row"}}>
+                          <span style={{fontSize:12,color:r.test?C.success:"#D1D5DB",flexShrink:0}}>{r.test?"✓":"○"}</span>
+                          <span style={{fontSize:11,color:r.test?"#374151":"#9CA3AF"}}>{isRTL?r.ar:r.en}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* CONFIRM PASSWORD */}
               <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>
