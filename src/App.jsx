@@ -2031,17 +2031,7 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
         </p>
 
         {/* FALLBACK: show link directly if EmailJS not set up */}
-        {activationUrl && (
-          <div style={{background:C.bg,border:`1.5px solid ${C.gold}40`,borderRadius:12,padding:"16px 20px",marginBottom:20,textAlign:"left"}}>
-            <p style={{fontSize:12,fontWeight:700,color:"#9CA3AF",marginBottom:8,textAlign:"center"}}>
-              {isRTL?"أو انقر على الرابط أدناه مباشرةً:":"Or click the link below directly:"}
-            </p>
-            <a href={activationUrl}
-              style={{display:"block",padding:"12px 20px",background:C.gold,color:"#fff",borderRadius:10,fontSize:14,fontWeight:700,textAlign:"center",textDecoration:"none",wordBreak:"break-all"}}>
-              ✅ {isRTL?"تفعيل حسابي الآن":"Activate My Account Now"}
-            </a>
-          </div>
-        )}
+        
 
         <button onClick={()=>nav("login")} style={{...S.btnPrimary,margin:"0 auto",padding:"12px 32px",fontSize:15}}>
           {isRTL?"العودة لتسجيل الدخول":"Back to Sign In"}
