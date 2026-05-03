@@ -334,6 +334,48 @@ const RoleBadge = ({ role }) => {
 };
 
 // ═══════════════════════════════════════════
+// EMAIL UTILITY — EmailJS wrapper
+// Supports: "activation" | "career_applicant" | "career_admin"
+// ═══════════════════════════════════════════
+async function sendEmail(type, params) {
+  const cfg = ls("orb_emailjs", { serviceId:"", templateId:"", templateCareer:"", templateAdmin:"", publicKey:"" });
+  if (!cfg.serviceId || !cfg.publicKey) {
+    console.warn(`[Orbit Email] EmailJS not configured. Would send "${type}" to ${params.to_email}`);
+    return false;
+  }
+
+  // Choose template based on type
+  const templateMap = {
+    activation:      cfg.templateId,
+    career_applicant: cfg.templateCareer || cfg.templateId,
+    career_admin:    cfg.templateAdmin   || cfg.templateId,
+  };
+  const templateId = templateMap[type];
+  if (!templateId) { console.warn(`[Orbit Email] No template for type: ${type}`); return false; }
+
+  try {
+    const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+      method:  "POST",
+      headers: { "Content-Type":"application/json" },
+      body: JSON.stringify({
+        service_id:      cfg.serviceId,
+        template_id:     templateId,
+        user_id:         cfg.publicKey,
+        accessToken:     cfg.privateKey || undefined,
+        template_params: params,
+      }),
+    });
+    if (res.ok) { console.info(`[Orbit Email] ✓ Sent "${type}" to ${params.to_email}`); return true; }
+    const txt = await res.text();
+    console.error(`[Orbit Email] ✗ Failed "${type}": ${res.status} — ${txt}`);
+    return false;
+  } catch(e) {
+    console.error(`[Orbit Email] ✗ Network error "${type}":`, e);
+    return false;
+  }
+}
+
+// ═══════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════
 export default function App() {
@@ -414,29 +456,18 @@ export default function App() {
       certificates:[]
     };
     saveUsers([...users,nu]);
-    // Send activation email via EmailJS (free service, no backend needed)
+
+    // ── SEND ACTIVATION EMAIL ──
     const activationUrl = `${window.location.origin}/?activate=${token}`;
-    try {
-      const cfg = ls("orb_emailjs",{serviceId:"",templateId:"",publicKey:""});
-      if (cfg.serviceId && cfg.templateId && cfg.publicKey) {
-        await fetch("https://api.emailjs.com/api/v1.0/email/send",{
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({
-            service_id:   cfg.serviceId,
-            template_id:  cfg.templateId,
-            user_id:      cfg.publicKey,
-            template_params:{
-              to_name:    nu.firstName,
-              to_email:   cleanEmail,
-              activate_url: activationUrl,
-              platform:   ls("orb_siteName","Orbit Learning"),
-            }
-          })
-        });
-      }
-    } catch(e) { console.warn("EmailJS not configured:",e); }
-    return { ok:true };
+    await sendEmail("activation", {
+      to_name:      nu.firstName,
+      to_email:     cleanEmail,
+      activate_url: activationUrl,
+      platform:     ls("orb_siteName","Orbit Learning"),
+      subject:      `Activate your ${ls("orb_siteName","Orbit Learning")} account`,
+    });
+
+    return { ok:true, activationUrl };
   };
   const logout = () => { setUser(null); localStorage.removeItem("orb_user"); setPage("home"); setAvatarOpen(false); };
 
@@ -1936,8 +1967,9 @@ function LoginPage({ nav, login, t, isRTL, onSocial }) {
 function SignupPage({ nav, signup, t, isRTL, onSocial }) {
   const [f,setF]     = useState({firstName:"",lastName:"",email:"",phone:"",password:"",confirm:""});
   const [err,setErr]  = useState("");
-  const [loading,setLoading]     = useState(false);
-  const [done, setDone]          = useState(false);
+  const [loading,setLoading]        = useState(false);
+  const [done, setDone]             = useState(false);
+  const [activationUrl, setActUrl]  = useState("");
   const [errIsLogin, setErrIsLogin] = useState(false);
 
   const go = async (e) => {
@@ -1962,6 +1994,7 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
         setErrIsLogin(false);
       }
     } else {
+      setActUrl(result.activationUrl||"");
       setDone(true);
     }
   };
@@ -1996,6 +2029,20 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
         <p style={{fontSize:13,color:"#9CA3AF",marginBottom:20}}>
           {isRTL?"لم تستلم الرسالة؟ تحقق من مجلد البريد المزعج (Spam).":"Didn't receive it? Check your spam/junk folder."}
         </p>
+
+        {/* FALLBACK: show link directly if EmailJS not set up */}
+        {activationUrl && (
+          <div style={{background:C.bg,border:`1.5px solid ${C.gold}40`,borderRadius:12,padding:"16px 20px",marginBottom:20,textAlign:"left"}}>
+            <p style={{fontSize:12,fontWeight:700,color:"#9CA3AF",marginBottom:8,textAlign:"center"}}>
+              {isRTL?"أو انقر على الرابط أدناه مباشرةً:":"Or click the link below directly:"}
+            </p>
+            <a href={activationUrl}
+              style={{display:"block",padding:"12px 20px",background:C.gold,color:"#fff",borderRadius:10,fontSize:14,fontWeight:700,textAlign:"center",textDecoration:"none",wordBreak:"break-all"}}>
+              ✅ {isRTL?"تفعيل حسابي الآن":"Activate My Account Now"}
+            </a>
+          </div>
+        )}
+
         <button onClick={()=>nav("login")} style={{...S.btnPrimary,margin:"0 auto",padding:"12px 32px",fontSize:15}}>
           {isRTL?"العودة لتسجيل الدخول":"Back to Sign In"}
         </button>
@@ -2239,16 +2286,47 @@ function CareersPage({ nav, t }) {
   const handleApply = (e) => {
     e.preventDefault(); setErr("");
     if (!form.name||!form.email) { setErr(isRTL?"الرجاء إدخال الاسم والبريد الإلكتروني":"Please fill name and email"); return; }
-    // Save application — read CV as base64 so admin can download it
-    const saveApp = (cvDataUrl) => {
+    const saveApp = async (cvDataUrl) => {
       const app = { id:`app-${Date.now()}`, jobId:selJob.id, name:form.name, email:form.email, phone:form.phone, cover:form.cover, cvName:cvFile?.name||"", cvUrl:cvDataUrl||"", date:new Date().toLocaleDateString() };
       const existing = ls("orb_apps",[]);
       ss("orb_apps",[...existing,app]);
+
+      const platform  = ls("orb_siteName","Orbit Learning");
+      const jobTitle  = selJob.titleEn;
+      const adminEmail = ls("orb_adminEmail","");
+
+      // Email 1: Confirmation to APPLICANT
+      await sendEmail("career_applicant", {
+        to_name:   form.name,
+        to_email:  form.email,
+        job_title: jobTitle,
+        platform:  platform,
+        subject:   `Application Received – ${jobTitle} at ${platform}`,
+        message:   `Hi ${form.name},\n\nThank you for applying to "${jobTitle}" at ${platform}. We've received your application and will review it carefully.\n\nWe'll reach out if your profile is a match.\n\nBest regards,\nThe ${platform} Team`,
+      });
+
+      // Email 2: New application alert to ADMIN
+      if (adminEmail) {
+        await sendEmail("career_admin", {
+          to_name:   "Hiring Team",
+          to_email:  adminEmail,
+          job_title: jobTitle,
+          applicant: form.name,
+          app_email: form.email,
+          app_phone: form.phone||"—",
+          cover:     form.cover||"(none)",
+          cv_name:   cvFile?.name||"No CV",
+          platform:  platform,
+          subject:   `New Application: ${form.name} → ${jobTitle}`,
+          message:   `New application received for "${jobTitle}".\n\nName: ${form.name}\nEmail: ${form.email}\nPhone: ${form.phone||"—"}\n\nCover Letter:\n${form.cover||"(none)"}\nCV: ${cvFile?.name||"Not uploaded"}\n\nLog in to Admin → Careers to view and download the CV.`,
+        });
+      }
+
       setSuccess(true);
     };
     if (cvFile) {
       const reader = new FileReader();
-      reader.onload = e => saveApp(e.target.result);
+      reader.onload = ev => saveApp(ev.target.result);
       reader.readAsDataURL(cvFile);
     } else {
       saveApp("");
@@ -3362,8 +3440,9 @@ function AdminSettings({ onSiteNameChange }) {
   const [notifReport, setNR]      = useState(false);
 
   // EmailJS config
-  const [ejs, setEjs] = useState(()=>ls("orb_emailjs",{serviceId:"",templateId:"",publicKey:""}));
+  const [ejs, setEjs] = useState(()=>ls("orb_emailjs",{serviceId:"",templateId:"",templateCareer:"",templateAdmin:"",publicKey:""}));
   const updateEjs = (k,v) => setEjs(p=>({...p,[k]:v}));
+  const [adminNotifEmail, setAdminNotifEmail] = useState(()=>ls("orb_adminEmail",""));
   // OAuth credentials
   const [oauth, setOauth] = useState(()=>ls("orb_oauth",{googleClientId:"485439031935-tqt4qasj02os6u7pd05rqn902hck6u1c.apps.googleusercontent.com",xClientId:"",linkedinClientId:""}));
   const updateOauth = (k,v) => setOauth(p=>({...p,[k]:v}));
@@ -3374,6 +3453,7 @@ function AdminSettings({ onSiteNameChange }) {
     ss("orb_amazonId", amazonId);
     ss("orb_oauth", oauth);
     ss("orb_emailjs", ejs);
+    ss("orb_adminEmail", adminNotifEmail);
     document.title = siteName;
     onSiteNameChange?.(siteName);   // ← triggers navbar re-render immediately
     setSaved(true);
@@ -3427,22 +3507,71 @@ function AdminSettings({ onSiteNameChange }) {
 
     {/* EMAIL SERVICE (EmailJS) */}
     <div style={{background:"#fff",padding:32,borderRadius:16,border:"1px solid rgba(45,51,71,0.07)",marginBottom:24}}>
-      <h2 style={{fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Email Service (Activation Emails)</h2>
-      <p style={{fontSize:13,color:"#9CA3AF",marginBottom:20}}>Used to send account activation emails to new students. Set up free at <strong>emailjs.com</strong></p>
-      <div style={{padding:14,background:`${ejs.serviceId&&ejs.templateId&&ejs.publicKey?C.successBg:C.dangerBg}`,borderRadius:10,marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
-        <span style={{fontSize:16}}>{ejs.serviceId&&ejs.templateId&&ejs.publicKey?"✅":"⚠️"}</span>
-        <p style={{fontSize:13,fontWeight:600,color:ejs.serviceId&&ejs.templateId&&ejs.publicKey?C.success:C.danger}}>
-          {ejs.serviceId&&ejs.templateId&&ejs.publicKey?"EmailJS is configured — activation emails will be sent":"EmailJS not configured — activation links won't be sent by email"}
+      <h2 style={{fontSize:16,fontWeight:700,color:C.navy,marginBottom:4}}>Email Service (EmailJS)</h2>
+      <p style={{fontSize:13,color:"#9CA3AF",marginBottom:20}}>Sends: activation emails to new students + career application notifications. Free at <strong>emailjs.com</strong></p>
+
+      {/* STATUS */}
+      <div style={{padding:14,background:ejs.serviceId&&ejs.publicKey?C.successBg:C.dangerBg,borderRadius:10,marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:16}}>{ejs.serviceId&&ejs.publicKey?"✅":"⚠️"}</span>
+        <p style={{fontSize:13,fontWeight:600,color:ejs.serviceId&&ejs.publicKey?C.success:C.danger}}>
+          {ejs.serviceId&&ejs.publicKey
+            ? "EmailJS configured — emails will be sent automatically"
+            : "EmailJS not configured — emails won't be sent. Students can still activate via the on-screen link."}
         </p>
       </div>
-      <div style={{display:"grid",gap:12}}>
-        <div><label style={S.label}>Service ID</label><input placeholder="service_xxxxxxx" value={ejs.serviceId} onChange={e=>updateEjs("serviceId",e.target.value)} style={S.input}/></div>
-        <div><label style={S.label}>Template ID</label><input placeholder="template_xxxxxxx" value={ejs.templateId} onChange={e=>updateEjs("templateId",e.target.value)} style={S.input}/></div>
-        <div><label style={S.label}>Public Key</label><input placeholder="your_public_key" value={ejs.publicKey} onChange={e=>updateEjs("publicKey",e.target.value)} style={S.input}/></div>
+
+      <div style={{display:"grid",gap:12,marginBottom:20}}>
+        {/* Core credentials */}
+        <div style={{padding:16,background:C.bg,borderRadius:10,border:"1px solid #E8E4DD"}}>
+          <p style={{fontSize:12,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>Core Credentials</p>
+          <div style={{display:"grid",gap:10}}>
+            <div><label style={S.label}>Service ID *</label><input placeholder="service_xxxxxxx" value={ejs.serviceId} onChange={e=>updateEjs("serviceId",e.target.value)} style={S.input}/></div>
+            <div><label style={S.label}>Public Key *</label><input placeholder="your_public_key" value={ejs.publicKey} onChange={e=>updateEjs("publicKey",e.target.value)} style={S.input}/></div>
+          </div>
+        </div>
+
+        {/* Email templates */}
+        <div style={{padding:16,background:C.bg,borderRadius:10,border:"1px solid #E8E4DD"}}>
+          <p style={{fontSize:12,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>Email Templates</p>
+          <div style={{display:"grid",gap:10}}>
+            <div>
+              <label style={S.label}>Account Activation Template ID *</label>
+              <input placeholder="template_activation" value={ejs.templateId} onChange={e=>updateEjs("templateId",e.target.value)} style={S.input}/>
+              <p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>Variables: <code>to_name</code>, <code>to_email</code>, <code>activate_url</code>, <code>platform</code></p>
+            </div>
+            <div>
+              <label style={S.label}>Career Applicant Confirmation Template ID</label>
+              <input placeholder="template_career_applicant (optional)" value={ejs.templateCareer||""} onChange={e=>updateEjs("templateCareer",e.target.value)} style={S.input}/>
+              <p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>Variables: <code>to_name</code>, <code>to_email</code>, <code>job_title</code>, <code>platform</code>, <code>message</code></p>
+            </div>
+            <div>
+              <label style={S.label}>Career Admin Notification Template ID</label>
+              <input placeholder="template_career_admin (optional)" value={ejs.templateAdmin||""} onChange={e=>updateEjs("templateAdmin",e.target.value)} style={S.input}/>
+              <p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>Variables: <code>to_name</code>, <code>to_email</code>, <code>applicant</code>, <code>job_title</code>, <code>app_email</code>, <code>app_phone</code>, <code>message</code></p>
+            </div>
+          </div>
+        </div>
+
+        {/* Admin notification email */}
+        <div style={{padding:16,background:C.bg,borderRadius:10,border:"1px solid #E8E4DD"}}>
+          <p style={{fontSize:12,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>Admin Notification Email</p>
+          <label style={S.label}>Receive career application alerts at:</label>
+          <input type="email" placeholder="linkybinky9@gmail.com" value={adminNotifEmail} onChange={e=>setAdminNotifEmail(e.target.value)} style={S.input}/>
+          <p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>When a student submits a job application, this email gets notified instantly.</p>
+        </div>
       </div>
-      <p style={{fontSize:11,color:"#9CA3AF",marginTop:10,lineHeight:1.7}}>
-        1. Create free account at emailjs.com → 2. Add Email Service → 3. Create Template with variables: <code>to_name</code>, <code>to_email</code>, <code>activate_url</code>, <code>platform</code> → 4. Paste IDs above
-      </p>
+
+      {/* Setup guide */}
+      <div style={{padding:16,background:"#F0F9FF",borderRadius:10,border:"1px solid #BAE6FD"}}>
+        <p style={{fontSize:12,fontWeight:700,color:"#0369A1",marginBottom:8}}>📋 Quick Setup (5 min)</p>
+        <ol style={{fontSize:12,color:"#374151",lineHeight:2,paddingLeft:16,margin:0}}>
+          <li>Go to <strong>emailjs.com</strong> → Create free account</li>
+          <li><strong>Email Services</strong> → Connect your Gmail/Outlook</li>
+          <li><strong>Email Templates</strong> → Create 3 templates (activation, career applicant, career admin)</li>
+          <li>Copy <strong>Service ID</strong> + <strong>Public Key</strong> from Account → API Keys</li>
+          <li>Paste all IDs above → Click Save Settings</li>
+        </ol>
+      </div>
     </div>
 
     <div style={{background:"#fff",padding:32,borderRadius:16,border:"1px solid rgba(45,51,71,0.07)",marginBottom:24}}>
