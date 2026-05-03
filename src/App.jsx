@@ -1916,16 +1916,6 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
             <h1 style={{...S.authTitle,fontFamily:isRTL?"'Cairo',sans-serif":"'Playfair Display',serif",textAlign:isRTL?"right":"left"}}>{t.signup.title}</h1>
             <p style={{fontSize:14,color:"#9CA3AF",marginBottom:16,textAlign:isRTL?"right":"left"}}>{t.signup.hasAccount} <button onClick={()=>nav("login")} style={{color:C.gold,fontWeight:600}}>{t.signup.loginLink}</button></p>
 
-            {/* CERTIFICATE NOTICE */}
-            <div style={{padding:14,background:`${C.gold}10`,border:`1.5px solid ${C.gold}30`,borderRadius:12,marginBottom:20,display:"flex",gap:10,alignItems:"flex-start"}}>
-              <span style={{fontSize:18,flexShrink:0}}>🎓</span>
-              <p style={{fontSize:13,color:C.goldD,lineHeight:1.7,textAlign:isRTL?"right":"left"}}>
-                {isRTL
-                  ? "الاسم الأول والأخير اللذان تدخلهما سيظهران على شهادة الإتمام. تأكد من كتابتهما بشكل صحيح."
-                  : "Your first and last name will appear on your course certificates. Please enter your full legal name."}
-              </p>
-            </div>
-
             {err && (
               <div style={{padding:"12px 16px",background:errIsLogin?`${C.gold}10`:C.dangerBg,border:`1.5px solid ${errIsLogin?C.gold:C.danger}30`,borderRadius:10,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
                 <p style={{fontSize:13,color:errIsLogin?C.goldD:C.danger,flex:1}}>{err}</p>
