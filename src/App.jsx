@@ -1319,17 +1319,29 @@ function CourseLearningPage({ course, user, nav, t, isRTL }) {  const [active,  
 
   // Issue certificate when all done
   const handleGetCert = () => {
-    const cert = { id:`cert-${Date.now()}`, courseId:course.id, courseTitle:course.title, date:new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}), svg: generateCertSVG(user.name, course.title, new Date().toLocaleDateString()) };
-    const users   = JSON.parse(localStorage.getItem("orb_users")||"[]");
-    const idx     = users.findIndex(u=>u.id===user.id);
-    if (idx!==-1) {
-      if (!users[idx].certificates.find(c=>c.courseId===course.id)) {
-        users[idx].certificates.push(cert);
-        localStorage.setItem("orb_users", JSON.stringify(users));
-      }
+    const certDate = new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+    const cert = {
+      id:          `cert-${Date.now()}`,
+      courseId:    course.id,
+      courseTitle: isRTL && course.titleAr ? course.titleAr : course.title,
+      courseTitleEn: course.title,
+      date:        certDate,
+      svg:         generateCertSVG(user.name, course.title, certDate),
+    };
+    const allUsers = JSON.parse(localStorage.getItem("orb_users")||"[]");
+    const idx = allUsers.findIndex(u=>u.id===user.id);
+    if (idx !== -1 && !allUsers[idx].certificates?.find(c=>c.courseId===course.id)) {
+      allUsers[idx].certificates = [...(allUsers[idx].certificates||[]), cert];
+      localStorage.setItem("orb_users", JSON.stringify(allUsers));
+      // Update active session
+      const updatedUser = {...user, certificates:[...(user.certificates||[]),cert]};
+      localStorage.setItem("orb_user", JSON.stringify(updatedUser));
     }
     setShowCert(cert);
   };
+
+  // Check if already has certificate
+  const existingCert = user?.certificates?.find(c=>c.courseId===course.id);
 
   const submitReview = () => {
     if (!rating || !comment.trim()) return;
@@ -1353,28 +1365,53 @@ function CourseLearningPage({ course, user, nav, t, isRTL }) {  const [active,  
         <button onClick={()=>nav("course-detail",course)} style={{fontSize:14,fontWeight:600,color:C.gold,marginBottom:20,display:"inline-flex",alignItems:"center",gap:6}}>← Back to Course</button>
 
         {/* PROGRESS BAR */}
-        <div style={{background:"#fff",borderRadius:14,padding:"16px 24px",marginBottom:24,border:"1px solid rgba(45,51,71,0.07)",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-          <div style={{flex:1,minWidth:200}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-              <span style={{fontSize:14,fontWeight:600,color:C.navy}}>Course Progress</span>
-              <span style={{fontSize:14,fontWeight:700,color:pct===100?C.success:C.gold}}>{pct}%</span>
+        <div style={{background:"#fff",borderRadius:14,padding:"16px 24px",marginBottom:24,border:"1px solid rgba(45,51,71,0.07)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:200}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                <span style={{fontSize:14,fontWeight:600,color:C.navy}}>{isRTL?"تقدم الكورس":"Course Progress"}</span>
+                <span style={{fontSize:14,fontWeight:700,color:pct===100?C.success:C.gold}}>{pct}%</span>
+              </div>
+              <div style={{height:8,background:C.creamL,borderRadius:10}}>
+                <div style={{height:"100%",width:`${pct}%`,background:pct===100?C.success:C.gold,borderRadius:10,transition:"width 0.5s"}}/>
+              </div>
+              <p style={{fontSize:12,color:"#9CA3AF",marginTop:4}}>{doneCount} / {totalMods} {isRTL?"درس مكتمل":"modules completed"}</p>
             </div>
-            <div style={{height:8,background:C.creamL,borderRadius:10}}><div style={{height:"100%",width:`${pct}%`,background:pct===100?C.success:C.gold,borderRadius:10,transition:"width 0.5s"}}/></div>
-            <p style={{fontSize:12,color:"#9CA3AF",marginTop:4}}>{doneCount} / {totalMods} modules completed</p>
-          </div>
-          {allDone && (
-            <div style={{display:"flex",gap:10}}>
-              <button onClick={handleGetCert} style={{...S.btnPrimary,padding:"10px 20px",fontSize:13,background:C.success,gap:6}}>
-                🎓 Get Certificate
+            {allDone && !reviews.find(r=>r.userId===user.id) && !showRating && (
+              <button onClick={()=>setShowRating(true)} style={{...S.btnPrimary,padding:"10px 18px",fontSize:13,background:C.navy}}>
+                ⭐ {isRTL?"قيّم الكورس":"Rate Course"}
               </button>
-              {!showRating && !reviews.find(r=>r.userId===user.id) && (
-                <button onClick={()=>setShowRating(true)} style={{...S.btnPrimary,padding:"10px 20px",fontSize:13,background:C.navy,gap:6}}>
-                  ⭐ Rate Course
-                </button>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </div>
+
+        {/* COURSE COMPLETED BANNER */}
+        {allDone && (
+          <div style={{background:`linear-gradient(135deg, ${C.navy} 0%, #1a2035 100%)`,borderRadius:16,padding:"28px 32px",marginBottom:24,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:20,position:"relative",overflow:"hidden"}}>
+            {/* Background decoration */}
+            <div style={{position:"absolute",right:-20,top:-20,width:120,height:120,borderRadius:"50%",background:"rgba(184,150,90,0.12)"}}/>
+            <div style={{position:"absolute",right:40,bottom:-30,width:80,height:80,borderRadius:"50%",background:"rgba(184,150,90,0.08)"}}/>
+            <div style={{position:"relative"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
+                <span style={{fontSize:28}}>🎓</span>
+                <h3 style={{fontSize:20,fontWeight:700,color:"#fff",fontFamily:"'Playfair Display',serif"}}>
+                  {isRTL?"تهانينا! أكملت الكورس":"Congratulations! Course Complete"}
+                </h3>
+              </div>
+              <p style={{fontSize:14,color:"rgba(213,207,193,0.75)"}}>
+                {isRTL
+                  ? `أكملت جميع دروس "${isRTL&&course.titleAr?course.titleAr:course.title}" بنجاح`
+                  : `You've completed all lessons in "${course.title}" successfully`}
+              </p>
+            </div>
+            <div style={{display:"flex",gap:12,position:"relative",flexWrap:"wrap"}}>
+              <button onClick={()=>{ existingCert ? setShowCert(existingCert) : handleGetCert(); }}
+                style={{padding:"13px 28px",background:C.gold,color:"#fff",borderRadius:12,fontWeight:700,fontSize:15,display:"flex",alignItems:"center",gap:8,border:"none",cursor:"pointer",whiteSpace:"nowrap"}}>
+                <I.Download/> {isRTL?"تحميل الشهادة":"Download Certificate"}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="learn-layout" style={{gap:24}}>
           {/* MAIN CONTENT */}
@@ -1540,14 +1577,42 @@ function CourseLearningPage({ course, user, nav, t, isRTL }) {  const [active,  
       {/* CERTIFICATE MODAL */}
       {showCert && (
         <div style={S.modalOv} onClick={()=>setShowCert(null)}>
-          <div style={{...S.modal,maxWidth:580,textAlign:"center"}} onClick={e=>e.stopPropagation()}>
-            <div style={S.modalHead}><h2 style={{fontSize:18,fontWeight:700,color:C.navy}}>🎓 Your Certificate</h2><button onClick={()=>setShowCert(null)} style={{color:"#9CA3AF"}}><I.X/></button></div>
+          <div style={{...S.modal,maxWidth:620}} onClick={e=>e.stopPropagation()}>
+            <div style={S.modalHead}>
+              <div>
+                <h2 style={{fontSize:18,fontWeight:700,color:C.navy}}>🎓 {isRTL?"شهادتك":"Your Certificate"}</h2>
+                <p style={{fontSize:13,color:"#9CA3AF",marginTop:2}}>{showCert.courseTitle}</p>
+              </div>
+              <button onClick={()=>setShowCert(null)} style={{color:"#9CA3AF",display:"flex"}}><I.X/></button>
+            </div>
             <div style={{padding:24}}>
-              <img src={showCert.svg} alt="Certificate" style={{width:"100%",borderRadius:12,border:"1px solid #E8E4DD",marginBottom:20}}/>
-              <p style={{fontSize:14,color:C.navy,fontWeight:600,marginBottom:16}}>Congratulations, {user.name}! 🎉</p>
-              <a href={showCert.svg} download={`Orbit-Certificate-${course.title}.svg`} style={{...S.btnPrimary,display:"inline-flex",margin:"0 auto",padding:"12px 28px",fontSize:14}}>
-                <I.Download/> Download Certificate
+              {/* Certificate preview */}
+              <div style={{borderRadius:12,overflow:"hidden",border:"2px solid #E8E4DD",marginBottom:20}}>
+                <img src={showCert.svg} alt="Certificate" style={{width:"100%",display:"block"}}/>
+              </div>
+              {/* Info row */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",background:C.bg,borderRadius:10,marginBottom:20,flexWrap:"wrap",gap:8}}>
+                <div>
+                  <p style={{fontSize:12,color:"#9CA3AF"}}>{isRTL?"الطالب":"Student"}</p>
+                  <p style={{fontSize:14,fontWeight:700,color:C.navy}}>{user.name}</p>
+                </div>
+                <div style={{textAlign:"center"}}>
+                  <p style={{fontSize:12,color:"#9CA3AF"}}>{isRTL?"الكورس":"Course"}</p>
+                  <p style={{fontSize:14,fontWeight:600,color:C.navy}}>{showCert.courseTitle}</p>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <p style={{fontSize:12,color:"#9CA3AF"}}>{isRTL?"تاريخ الإصدار":"Issued"}</p>
+                  <p style={{fontSize:14,fontWeight:600,color:C.navy}}>{showCert.date}</p>
+                </div>
+              </div>
+              {/* Download button */}
+              <a href={showCert.svg} download={`Orbit-Certificate-${showCert.courseTitleEn||showCert.courseTitle}.svg`}
+                style={{...S.btnPrimary,display:"flex",width:"100%",justifyContent:"center",padding:"14px 0",fontSize:15,textDecoration:"none",background:C.gold,gap:10}}>
+                <I.Download/> {isRTL?"تحميل الشهادة PDF":"Download Certificate"}
               </a>
+              <p style={{fontSize:12,color:"#9CA3AF",textAlign:"center",marginTop:10}}>
+                {isRTL?"الشهادة محفوظة في لوحة التحكم الخاصة بك":"Certificate also saved in your Dashboard"}
+              </p>
             </div>
           </div>
         </div>
@@ -1619,6 +1684,41 @@ function DashboardPage({ courses, user, nav, t, isRTL }) {
           ))}
         </div>
       : <div style={{...S.empty,marginBottom:48}}><I.Book/><h2 style={{...S.secTitle,marginTop:16}}>{t.dashboard.empty.title}</h2><p style={{color:"#9CA3AF",marginTop:8,marginBottom:24}}>{t.dashboard.empty.sub}</p><button onClick={()=>nav("courses")} style={S.btnPrimary}>{t.dashboard.empty.btn}</button></div>}
+
+    {/* ── MY CERTIFICATES SECTION ── */}
+    {(() => {
+      const certs = ls("orb_users",[]).find(u=>u.id===user?.id)?.certificates || user?.certificates || [];
+      return certs.length > 0 ? (
+        <div style={{marginBottom:40}}>
+          <h2 style={{...S.secTitle,marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
+            🎓 {isRTL?"شهاداتي":"My Certificates"}
+            <span style={{fontSize:13,fontWeight:600,color:C.gold,background:`${C.gold}15`,padding:"3px 10px",borderRadius:20}}>{certs.length}</span>
+          </h2>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16}}>
+            {certs.map((cert,i)=>(
+              <div key={cert.id||i} style={{background:"#fff",borderRadius:16,border:"1px solid rgba(45,51,71,0.07)",overflow:"hidden"}}>
+                {/* Mini preview */}
+                <div style={{height:140,overflow:"hidden",position:"relative",background:C.navy}}>
+                  <img src={cert.svg} alt="Certificate" style={{width:"100%",objectFit:"cover",objectPosition:"top"}}/>
+                  <div style={{position:"absolute",inset:0,background:"linear-gradient(to bottom, transparent 50%, rgba(45,51,71,0.6))"}}/>
+                </div>
+                <div style={{padding:16}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                    <span style={{fontSize:16}}>🏅</span>
+                    <p style={{fontSize:14,fontWeight:700,color:C.navy,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cert.courseTitle}</p>
+                  </div>
+                  <p style={{fontSize:12,color:"#9CA3AF",marginBottom:14}}>{isRTL?"صدرت في":"Issued"} {cert.date}</p>
+                  <a href={cert.svg} download={`Orbit-Certificate-${cert.courseTitleEn||cert.courseTitle}.svg`}
+                    style={{...S.btnPrimary,display:"flex",justifyContent:"center",padding:"10px 0",fontSize:13,gap:8,textDecoration:"none",background:C.gold}}>
+                    <I.Download/> {isRTL?"تحميل الشهادة":"Download Certificate"}
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null;
+    })()}
 
     {/* ── PROFILE EDIT SECTION ── */}
     <div style={{background:"#fff",borderRadius:20,border:"1px solid rgba(45,51,71,0.07)",overflow:"hidden",marginBottom:40}}>
