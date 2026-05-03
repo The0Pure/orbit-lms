@@ -98,7 +98,7 @@ const T = {
       empty: { title:"No Courses Yet", sub:"Enroll in a course to start learning", btn:"Browse Courses" },
     },
     login: { title:"Welcome Back — Continue Where You Left Off", email:"Email Address", password:"Password", remember:"Remember Me", forgot:"Forgot Password?", btn:"Log In", noAccount:"Don't have an account?", signupLink:"Sign Up Free", orWith:"Or log in with" },
-    signup: { title:"Create Account", firstName:"First Name", lastName:"Last Name", email:"Email Address", password:"Password", btn:"Create Account", hasAccount:"Already have an account?", loginLink:"Sign In", terms:"By signing up, you agree to our Terms of Service and Privacy Policy." },
+    signup: { title:"Create Account", firstName:"First Name", lastName:"Last Name", email:"Email Address", phone:"Mobile Number", password:"Password", btn:"Create Account", hasAccount:"Already have an account?", loginLink:"Sign In", terms:"By signing up, you agree to our Terms of Service and Privacy Policy." },
     about: { title:"About Orbit", mission:"Our Mission", missionText:"Orbit exists to make world-class education accessible to interior design & architecture students. We partner with industry practitioners to deliver courses that translate directly to real-world skills and career advancement.", team:"Our Team — Designers and Educators First", stats:[{v:"500+",l:"Active Learners"},{v:"20+",l:"Expert Instructors"},{v:"98%",l:"Satisfaction Rate"}] },
     footer: { tagline:"Orbit — Where Future Designers Begin", newsletter:"Subscribe to our newsletter — design tips and exclusive content every week", placeholder:"Enter your email", subscribe:"Subscribe", copyright:"All rights reserved © Orbit LMS 2026", nav:["Home","Courses","About Us","Contact Us"], support:["Help Center","Privacy Policy","Terms of Service","FAQ"] },
     payment: { title:"Enroll in Course", emailLabel:"Email for Invoice", payBtn:"Payment", summary:"Order Summary", subtotal:"Course price", vat:"VAT (15%)", total:"Total", secured:"🔒 Secured · Invoice sent to your email automatically" },
@@ -154,7 +154,7 @@ const T = {
       empty: { title:"ما سجّلت في أي كورس بعد", sub:"اشترك في كورس وابدأ رحلتك", btn:"تصفح الكورسات" },
     },
     login: { title:"أهلاً بعودتك — كمّل من حيث توقفت", email:"البريد الإلكتروني", password:"كلمة المرور", remember:"تذكرني", forgot:"نسيت كلمة المرور؟", btn:"تسجيل الدخول", noAccount:"ليس لديك حساب؟", signupLink:"سجّل الآن — مجاناً", orWith:"أو تسجيل الدخول بـ" },
-    signup: { title:"إنشاء حساب جديد", firstName:"الاسم الأول", lastName:"اسم العائلة", email:"البريد الإلكتروني", password:"كلمة المرور", btn:"إنشاء الحساب", hasAccount:"لديك حساب بالفعل؟", loginLink:"تسجيل الدخول", terms:"بالتسجيل، أنت توافق على شروط الاستخدام وسياسة الخصوصية." },
+    signup: { title:"إنشاء حساب جديد", firstName:"الاسم الأول", lastName:"اسم العائلة", email:"البريد الإلكتروني", phone:"رقم الجوال", password:"كلمة المرور", btn:"إنشاء الحساب", hasAccount:"لديك حساب بالفعل؟", loginLink:"تسجيل الدخول", terms:"بالتسجيل، أنت توافق على شروط الاستخدام وسياسة الخصوصية." },
     about: { title:"من نحن", mission:"رسالتنا", missionText:"Orbit موجودة لتجعل التعليم العالمي في متناول طلاب التصميم الداخلي والهندسة. نتعاون مع ممارسين في الصناعة لتقديم كورسات تترجم مباشرةً لمهارات حقيقية وفرص مهنية.", team:"فريقنا — مصممون ومدرّبون قبل أي شيء", stats:[{v:"+500",l:"متعلم نشط"},{v:"+20",l:"مدرّب متخصص"},{v:"98%",l:"معدل الرضا"}] },
     footer: { tagline:"Orbit — حيث يبدأ مصممو المستقبل", newsletter:"اشترك في نشرتنا — نصائح تصميم ومحتوى حصري كل أسبوع", placeholder:"أدخل بريدك الإلكتروني", subscribe:"اشترك", copyright:"جميع الحقوق محفوظة © Orbit LMS 2026", nav:["الرئيسية","الكورسات","من نحن","تواصل معنا"], support:["مركز المساعدة","سياسة الخصوصية","الشروط والأحكام","الأسئلة الشائعة"] },
     payment: { title:"الاشتراك في الكورس", emailLabel:"البريد الإلكتروني للفاتورة", payBtn:"الدفع", summary:"ملخص الطلب", subtotal:"سعر الكورس", vat:"ضريبة القيمة المضافة (15%)", total:"الإجمالي", secured:"🔒 آمن · الفاتورة تُرسل تلقائياً على بريدك" },
@@ -388,22 +388,49 @@ export default function App() {
     loginLimiter.increment();
     return { ok:false, msg:"Invalid email or password" };
   };
-  const signup = (fd) => {
+  const signup = async (fd) => {
     const cleanEmail = sanitize(fd.email).toLowerCase();
-    if (users.find(u=>u.email===cleanEmail)) return false;
-    const nu={
+    if (users.find(u=>u.email===cleanEmail)) return { ok:false, msg:"email_exists" };
+    // Generate activation token
+    const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const nu = {
       id:`u-${Date.now()}`,
       firstName: sanitize(fd.firstName),
       lastName:  sanitize(fd.lastName),
       name:`${sanitize(fd.firstName)} ${sanitize(fd.lastName)}`,
       email:     cleanEmail,
+      phone:     sanitize(fd.phone||""),
       password:  fd.password,
       role:"student",
+      verified:  false,      // must verify email before login
+      token:     token,
       enrolledCourses:[],
       certificates:[]
     };
     saveUsers([...users,nu]);
-    const {password:_,...s}=nu; setUser(s); ss("orb_user",s); setPage("dashboard"); return true;
+    // Send activation email via EmailJS (free service, no backend needed)
+    const activationUrl = `${window.location.origin}/?activate=${token}`;
+    try {
+      const cfg = ls("orb_emailjs",{serviceId:"",templateId:"",publicKey:""});
+      if (cfg.serviceId && cfg.templateId && cfg.publicKey) {
+        await fetch("https://api.emailjs.com/api/v1.0/email/send",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({
+            service_id:   cfg.serviceId,
+            template_id:  cfg.templateId,
+            user_id:      cfg.publicKey,
+            template_params:{
+              to_name:    nu.firstName,
+              to_email:   cleanEmail,
+              activate_url: activationUrl,
+              platform:   ls("orb_siteName","Orbit Learning"),
+            }
+          })
+        });
+      }
+    } catch(e) { console.warn("EmailJS not configured:",e); }
+    return { ok:true };
   };
   const logout = () => { setUser(null); localStorage.removeItem("orb_user"); setPage("home"); setAvatarOpen(false); };
 
@@ -1506,6 +1533,30 @@ function CourseLearningPage({ course, user, nav, t, isRTL }) {  const [active,  
 function DashboardPage({ courses, user, nav, t, isRTL }) {
   const enrolled = courses.filter(c=>user?.enrolledCourses?.includes(c.id));
   const days = [{d:"Mon"},{d:"Tue"},{d:"Wed"},{d:"Thu"},{d:"Fri"},{d:"Sat"},{d:"Sun"}];
+
+  // Profile edit state
+  const [editProfile, setEditProfile] = useState(false);
+  const [pf, setPf] = useState({ firstName:user?.firstName||"", lastName:user?.lastName||"", email:user?.email||"", phone:user?.phone||"" });
+  const [pfSaved, setPfSaved] = useState(false);
+  const [pfErr, setPfErr] = useState("");
+
+  const saveProfile = (e) => {
+    e.preventDefault(); setPfErr("");
+    if (!pf.firstName.trim()||!pf.lastName.trim()) { setPfErr(isRTL?"الاسم الأول والأخير مطلوبان":"First and last name are required"); return; }
+    if (!pf.phone.trim()) { setPfErr(isRTL?"رقم الجوال مطلوب":"Mobile number is required"); return; }
+    // Update user in localStorage
+    const allUsers = ls("orb_users",[]);
+    const updated = allUsers.map(u => u.id===user.id
+      ? {...u, firstName:sanitize(pf.firstName), lastName:sanitize(pf.lastName), name:`${sanitize(pf.firstName)} ${sanitize(pf.lastName)}`, phone:sanitize(pf.phone)}
+      : u
+    );
+    ss("orb_users", updated);
+    const newUser = {...user, firstName:sanitize(pf.firstName), lastName:sanitize(pf.lastName), name:`${sanitize(pf.firstName)} ${sanitize(pf.lastName)}`, phone:sanitize(pf.phone)};
+    ss("orb_user", newUser);
+    // Force page refresh to reflect new name in navbar
+    window.location.reload();
+  };
+
   return <div style={{paddingTop:40}}><div style={S.section}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:32,flexWrap:"wrap",gap:16}}>
       <div><h1 style={{...S.pageTitle,fontFamily:isRTL?"'Cairo',serif":"'Playfair Display',serif"}}>{t.dashboard.welcome.replace('{name}',user?.firstName||user?.name?.split(" ")[0])}</h1><p style={S.pageSub}>{isRTL?"تابع رحلتك":"Continue your learning journey"}</p></div>
@@ -1526,7 +1577,7 @@ function DashboardPage({ courses, user, nav, t, isRTL }) {
     </div>
     <h2 style={{...S.secTitle,marginBottom:20}}>{t.dashboard.sections.continueLearning}</h2>
     {enrolled.length>0
-      ? <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      ? <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:48}}>
           {enrolled.map(c=>(
             <button key={c.id} onClick={()=>nav("course-learn",c)} style={S.progressCard}>
               <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:14}}>
@@ -1538,7 +1589,56 @@ function DashboardPage({ courses, user, nav, t, isRTL }) {
             </button>
           ))}
         </div>
-      : <div style={S.empty}><I.Book/><h2 style={{...S.secTitle,marginTop:16}}>{t.dashboard.empty.title}</h2><p style={{color:"#9CA3AF",marginTop:8,marginBottom:24}}>{t.dashboard.empty.sub}</p><button onClick={()=>nav("courses")} style={S.btnPrimary}>{t.dashboard.empty.btn}</button></div>}
+      : <div style={{...S.empty,marginBottom:48}}><I.Book/><h2 style={{...S.secTitle,marginTop:16}}>{t.dashboard.empty.title}</h2><p style={{color:"#9CA3AF",marginTop:8,marginBottom:24}}>{t.dashboard.empty.sub}</p><button onClick={()=>nav("courses")} style={S.btnPrimary}>{t.dashboard.empty.btn}</button></div>}
+
+    {/* ── PROFILE EDIT SECTION ── */}
+    <div style={{background:"#fff",borderRadius:20,border:"1px solid rgba(45,51,71,0.07)",overflow:"hidden",marginBottom:40}}>
+      <button onClick={()=>setEditProfile(!editProfile)} style={{width:"100%",padding:"20px 28px",display:"flex",justifyContent:"space-between",alignItems:"center",textAlign:isRTL?"right":"left",background:"#fff"}}>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <div style={{width:42,height:42,borderRadius:12,background:`${C.teal}15`,display:"flex",alignItems:"center",justifyContent:"center",color:C.teal}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div style={{textAlign:isRTL?"right":"left"}}>
+            <p style={{fontSize:16,fontWeight:700,color:C.navy}}>{isRTL?"تعديل الملف الشخصي":"Edit Profile"}</p>
+            <p style={{fontSize:13,color:"#9CA3AF",marginTop:2}}>{user?.name} · {user?.phone||"—"} · {user?.email}</p>
+          </div>
+        </div>
+        <span style={{fontSize:18,color:"#9CA3AF",transform:editProfile?"rotate(180deg)":"none",transition:"transform 0.2s"}}>▾</span>
+      </button>
+
+      {editProfile && (
+        <div style={{padding:"0 28px 28px",borderTop:"1px solid #F0ECE5",direction:isRTL?"rtl":"ltr",fontFamily:isRTL?"'Cairo',sans-serif":"inherit"}}>
+          <p style={{fontSize:13,color:"#9CA3AF",padding:"16px 0 20px",textAlign:isRTL?"right":"left"}}>
+            {isRTL?"يمكنك تعديل الاسم ورقم الجوال. البريد الإلكتروني للعرض فقط.":"You can edit your name and phone number. Email is for display only."}
+          </p>
+          {pfErr && <div style={{...S.errBox,marginBottom:16}}>{pfErr}</div>}
+          <form onSubmit={saveProfile}>
+            <div className="name-grid" style={{marginBottom:14}}>
+              <div>
+                <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.firstName} *</label>
+                <input required value={pf.firstName} onChange={e=>setPf({...pf,firstName:e.target.value})} style={{...S.input,textAlign:isRTL?"right":"left"}}/>
+              </div>
+              <div>
+                <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.lastName} *</label>
+                <input required value={pf.lastName} onChange={e=>setPf({...pf,lastName:e.target.value})} style={{...S.input,textAlign:isRTL?"right":"left"}}/>
+              </div>
+            </div>
+            <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.email}</label>
+            <input type="email" value={pf.email} readOnly style={{...S.input,marginBottom:14,background:"#F9F8F5",color:"#9CA3AF",cursor:"not-allowed"}}/>
+            <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.phone} *</label>
+            <input required type="tel" inputMode="numeric" value={pf.phone} onChange={e=>setPf({...pf,phone:e.target.value.replace(/[^0-9+\-\s]/g,"")})} placeholder={isRTL?"05XXXXXXXX":"05XXXXXXXX"} style={{...S.input,marginBottom:20,textAlign:isRTL?"right":"left"}}/>
+            <div style={{display:"flex",gap:12}}>
+              <button type="button" onClick={()=>setEditProfile(false)} style={{flex:1,padding:"12px",background:"#E8E4DD",borderRadius:10,fontWeight:600,fontSize:14,color:C.navy}}>
+                {isRTL?"إلغاء":"Cancel"}
+              </button>
+              <button type="submit" style={{flex:1,...S.btnPrimary,padding:"12px",justifyContent:"center",fontSize:14}}>
+                {isRTL?"حفظ التغييرات":"Save Changes"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
   </div></div>;
 }
 
@@ -1705,9 +1805,13 @@ function LoginPage({ nav, login, t, isRTL, onSocial }) {
 // SIGNUP
 // ═══════════════════════════════════════════
 function SignupPage({ nav, signup, t, isRTL, onSocial }) {
-  const [f,setF]   = useState({firstName:"",lastName:"",email:"",password:""});
+  const [f,setF]   = useState({firstName:"",lastName:"",email:"",phone:"",password:""});
   const [err,setErr] = useState("");
-  const go = e => { e.preventDefault(); setErr(""); if(!signup(f)) setErr(isRTL?"البريد الإلكتروني مسجّل مسبقاً":"Email already registered"); };
+  const go = e => {
+    e.preventDefault(); setErr("");
+    if (!f.phone.trim()) { setErr(isRTL?"رقم الجوال مطلوب":"Mobile number is required"); return; }
+    if (!signup(f)) setErr(isRTL?"البريد الإلكتروني مسجّل مسبقاً":"Email already registered");
+  };
   return (
     <div style={{minHeight:"calc(100vh - 68px)",display:"flex",flexDirection:"column",direction:isRTL?"rtl":"ltr"}}>
       <div className="auth-split" style={{flex:1}}>
@@ -1717,7 +1821,6 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
         />
         <div style={S.authForm}>
           <div style={{width:"100%",maxWidth:420}}>
-            {/* LOGO — visible on mobile only */}
             <div className="auth-mobile-logo" style={{display:"none",alignItems:"center",gap:10,marginBottom:28,justifyContent:"center"}}>
               <OrbitLogo size={36}/>
               <span style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,color:C.navy}}>Orbit</span>
@@ -1736,27 +1839,41 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
             </div>
             {err && <div style={S.errBox}>{err}</div>}
             <form onSubmit={go}>
-              <div className="name-grid" style={{marginBottom:16}}>
+              {/* FIRST + LAST NAME */}
+              <div className="name-grid" style={{marginBottom:14}}>
                 <div>
-                  <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.firstName}</label>
-                  <input required placeholder={isRTL?"الأول":"First"} autoComplete="given-name" value={f.firstName} onChange={e=>setF({...f,firstName:e.target.value})} style={{...S.input,textAlign:isRTL?"right":"left"}}/>
+                  <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.firstName} *</label>
+                  <input required placeholder={isRTL?"الاسم الأول":"First name"} autoComplete="given-name" value={f.firstName} onChange={e=>setF({...f,firstName:e.target.value})} style={{...S.input,textAlign:isRTL?"right":"left"}}/>
                 </div>
                 <div>
-                  <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.lastName}</label>
-                  <input required placeholder={isRTL?"الأخير":"Last"} autoComplete="family-name" value={f.lastName} onChange={e=>setF({...f,lastName:e.target.value})} style={{...S.input,textAlign:isRTL?"right":"left"}}/>
+                  <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.lastName} *</label>
+                  <input required placeholder={isRTL?"اسم العائلة":"Last name"} autoComplete="family-name" value={f.lastName} onChange={e=>setF({...f,lastName:e.target.value})} style={{...S.input,textAlign:isRTL?"right":"left"}}/>
                 </div>
               </div>
-              <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.email}</label>
-              <input required type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={f.email} onChange={e=>setF({...f,email:e.target.value})} style={{...S.input,marginBottom:16,textAlign:isRTL?"right":"left"}}/>
-              <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.password}</label>
+
+              {/* EMAIL */}
+              <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.email} *</label>
+              <input required type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={f.email} onChange={e=>setF({...f,email:e.target.value})} style={{...S.input,marginBottom:14,textAlign:isRTL?"right":"left"}}/>
+
+              {/* PHONE — mandatory */}
+              <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.phone} *</label>
+              <div style={{position:"relative",marginBottom:14}}>
+                <span style={{position:"absolute",[isRTL?"right":"left"]:14,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#9CA3AF",pointerEvents:"none",lineHeight:1}}>🇸🇦 +966</span>
+                <input required type="tel" inputMode="numeric" autoComplete="tel" placeholder="5XXXXXXXX"
+                  value={f.phone} onChange={e=>setF({...f,phone:e.target.value.replace(/[^0-9+\-\s]/g,"")})}
+                  style={{...S.input,[isRTL?"paddingRight":"paddingLeft"]:88,textAlign:isRTL?"right":"left"}}/>
+              </div>
+
+              {/* PASSWORD */}
+              <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.password} *</label>
               <input required type="password" autoComplete="new-password" placeholder={isRTL?"8 أحرف على الأقل":"Min. 8 characters"} value={f.password} onChange={e=>setF({...f,password:e.target.value})} style={{...S.input,textAlign:isRTL?"right":"left"}}/>
+
               <button type="submit" style={{...S.btnPrimary,width:"100%",justifyContent:"center",marginTop:20,marginBottom:16,padding:"15px 0",fontSize:15}}>{t.signup.btn}</button>
             </form>
             <p style={{fontSize:11,color:"#9CA3AF",textAlign:"center",lineHeight:1.7}}>{t.signup.terms}</p>
             <div style={S.divider}><span style={{position:"relative",background:C.bg,padding:"0 16px",fontSize:12,color:"#9CA3AF"}}>{t.login.orWith}</span></div>
             <div style={{display:"flex",flexDirection:"column",gap:10,marginTop:20}}>
-              <SocialLoginBtn provider="google"   label={isRTL?"التسجيل بـ Google":   "Sign up with Google"}   onClick={()=>onSocial("google")}/>
-
+              <SocialLoginBtn provider="google" label={isRTL?"التسجيل بـ Google":"Sign up with Google"} onClick={()=>onSocial("google")}/>
             </div>
           </div>
         </div>
