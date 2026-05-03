@@ -348,8 +348,9 @@ export default function App() {
   const [payModal,   setPayModal]   = useState(null);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [catFilter,  setCatFilter]  = useState("All");
-  const [lang,       setLang]       = useState(()=>ls("orb_lang","en"));
-  const [siteName,   setSiteNameApp] = useState(()=>ls("orb_siteName","Orbit Learning"));
+  const [lang,       setLang]           = useState(()=>ls("orb_lang","en"));
+  const [siteName,   setSiteNameApp]     = useState(()=>ls("orb_siteName","Orbit Learning"));
+  const [activationSuccess, setActivationSuccess] = useState(false);
 
   const t   = T[lang] || T.en;
   const isRTL = lang === "ar";
@@ -382,6 +383,11 @@ export default function App() {
     }
     const f = users.find(u=>u.email===cleanEmail && u.password===cleanPw);
     if (f) {
+      if (f.verified === false) {
+        return { ok:false, msg: isRTL
+          ? "يرجى تفعيل حسابك أولاً. تحقق من بريدك الإلكتروني للحصول على رابط التفعيل."
+          : "Please verify your email first. Check your inbox for the activation link." };
+      }
       loginLimiter.reset();
       const {password:_,...s}=f; setUser(s); ss("orb_user",s); setPage("dashboard"); return { ok:true };
     }
@@ -559,7 +565,25 @@ export default function App() {
   useEffect(()=>{
     const s=ls("orb_user",null); if(s) setUser(s);
 
-    // Set Orbit logo as browser tab favicon
+    // Handle activation link: ?activate=TOKEN
+    const params = new URLSearchParams(window.location.search);
+    const token  = params.get("activate");
+    if (token) {
+      const allUsers = ls("orb_users",[]);
+      const found    = allUsers.find(u=>u.token===token);
+      if (found && !found.verified) {
+        const updated = allUsers.map(u=>u.token===token ? {...u,verified:true,token:""} : u);
+        ss("orb_users", updated);
+        const {password:_,...safe} = updated.find(u=>u.id===found.id);
+        setUser(safe); ss("orb_user",safe);
+        window.history.replaceState({},"",window.location.pathname);
+        setPage("dashboard");
+        setActivationSuccess(true);
+        setTimeout(()=>setActivationSuccess(false), 6000);
+      }
+    }
+
+    // Favicon
     const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
       <rect width="100" height="100" rx="22" fill="#2D3347"/>
       <circle cx="50" cy="52" r="36" fill="#D5CFC1"/>
@@ -570,8 +594,6 @@ export default function App() {
     let link = document.querySelector("link[rel~='icon']");
     if (!link) { link = document.createElement("link"); link.rel = "icon"; document.head.appendChild(link); }
     link.href = faviconUrl;
-
-    // Set page title
     document.title = ls("orb_siteName","Orbit Learning");
   },[]);
 
@@ -730,6 +752,13 @@ export default function App() {
             </div>
           </div>
         </footer>
+      )}
+
+      {/* ── ACTIVATION SUCCESS TOAST ── */}
+      {activationSuccess && (
+        <div style={{position:"fixed",top:80,left:"50%",transform:"translateX(-50%)",zIndex:9999,background:C.success,color:"#fff",padding:"14px 28px",borderRadius:50,fontSize:15,fontWeight:600,boxShadow:"0 4px 20px rgba(0,0,0,0.15)",display:"flex",alignItems:"center",gap:10,whiteSpace:"nowrap"}}>
+          ✅ {isRTL?"تم تفعيل حسابك بنجاح! أهلاً بك 🎉":"Account verified successfully! Welcome 🎉"}
+        </div>
       )}
 
       {/* ── CHATBOT ── */}
@@ -1805,13 +1834,72 @@ function LoginPage({ nav, login, t, isRTL, onSocial }) {
 // SIGNUP
 // ═══════════════════════════════════════════
 function SignupPage({ nav, signup, t, isRTL, onSocial }) {
-  const [f,setF]   = useState({firstName:"",lastName:"",email:"",phone:"",password:""});
-  const [err,setErr] = useState("");
-  const go = e => {
+  const [f,setF]     = useState({firstName:"",lastName:"",email:"",phone:"",password:"",confirm:""});
+  const [err,setErr]  = useState("");
+  const [loading,setLoading]     = useState(false);
+  const [done, setDone]          = useState(false);
+  const [errIsLogin, setErrIsLogin] = useState(false);
+
+  const go = async (e) => {
     e.preventDefault(); setErr("");
-    if (!f.phone.trim()) { setErr(isRTL?"رقم الجوال مطلوب":"Mobile number is required"); return; }
-    if (!signup(f)) setErr(isRTL?"البريد الإلكتروني مسجّل مسبقاً":"Email already registered");
+    if (!f.phone.trim())            { setErr(isRTL?"رقم الجوال مطلوب":"Mobile number is required"); return; }
+    if (f.password.length < 8)      { setErr(isRTL?"كلمة المرور يجب أن تكون 8 أحرف على الأقل":"Password must be at least 8 characters"); return; }
+    if (f.password !== f.confirm)   { setErr(isRTL?"كلمتا المرور غير متطابقتين":"Passwords do not match"); return; }
+    setLoading(true);
+    const result = await signup(f);
+    setLoading(false);
+    if (!result.ok) {
+      if (result.msg === "email_exists") {
+        setErr(isRTL
+          ? "يبدو أن هذا البريد الإلكتروني مسجّل بالفعل. هل تريد تسجيل الدخول؟"
+          : "This email is already registered. Want to sign in instead?");
+        setErrIsLogin(true);
+      } else {
+        setErr(isRTL?"حدث خطأ، يرجى المحاولة لاحقاً":"An error occurred, please try again");
+        setErrIsLogin(false);
+      }
+    } else {
+      setDone(true);
+    }
   };
+
+  // ── VERIFICATION PENDING SCREEN ──
+  if (done) return (
+    <div style={{minHeight:"calc(100vh - 68px)",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg,direction:isRTL?"rtl":"ltr",padding:"40px 20px"}}>
+      <div style={{background:"#fff",borderRadius:24,padding:"48px 40px",maxWidth:480,width:"100%",textAlign:"center",boxShadow:"0 8px 40px rgba(45,51,71,0.1)"}}>
+        <div style={{width:80,height:80,borderRadius:"50%",background:`${C.gold}15`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 24px",fontSize:36}}>📧</div>
+        <h2 style={{fontFamily:isRTL?"'Cairo',serif":"'Playfair Display',serif",fontSize:24,fontWeight:700,color:C.navy,marginBottom:12}}>
+          {isRTL?"تحقق من بريدك الإلكتروني":"Check Your Email"}
+        </h2>
+        <p style={{fontSize:15,color:"#6B7280",lineHeight:1.9,marginBottom:8}}>
+          {isRTL
+            ? `أرسلنا رابط تفعيل إلى`
+            : `We sent an activation link to`}
+        </p>
+        <p style={{fontSize:16,fontWeight:700,color:C.navy,marginBottom:24}}>{f.email}</p>
+        <div style={{background:C.bg,borderRadius:14,padding:"16px 20px",marginBottom:28,textAlign:isRTL?"right":"left"}}>
+          {[
+            isRTL?"افتح بريدك الإلكتروني":"Open your email inbox",
+            isRTL?"ابحث عن رسالة من Orbit Learning":"Find the email from Orbit Learning",
+            isRTL?"اضغط على رابط التفعيل":"Click the activation link",
+            isRTL?"سيتم تسجيل دخولك تلقائياً":"You'll be logged in automatically",
+          ].map((step,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:12,marginBottom:i<3?12:0,flexDirection:isRTL?"row-reverse":"row"}}>
+              <div style={{width:24,height:24,borderRadius:"50%",background:C.gold,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,flexShrink:0}}>{i+1}</div>
+              <p style={{fontSize:14,color:"#4A5568"}}>{step}</p>
+            </div>
+          ))}
+        </div>
+        <p style={{fontSize:13,color:"#9CA3AF",marginBottom:20}}>
+          {isRTL?"لم تستلم الرسالة؟ تحقق من مجلد البريد المزعج (Spam).":"Didn't receive it? Check your spam/junk folder."}
+        </p>
+        <button onClick={()=>nav("login")} style={{...S.btnPrimary,margin:"0 auto",padding:"12px 32px",fontSize:15}}>
+          {isRTL?"العودة لتسجيل الدخول":"Back to Sign In"}
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div style={{minHeight:"calc(100vh - 68px)",display:"flex",flexDirection:"column",direction:isRTL?"rtl":"ltr"}}>
       <div className="auth-split" style={{flex:1}}>
@@ -1828,18 +1916,29 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
             <h1 style={{...S.authTitle,fontFamily:isRTL?"'Cairo',sans-serif":"'Playfair Display',serif",textAlign:isRTL?"right":"left"}}>{t.signup.title}</h1>
             <p style={{fontSize:14,color:"#9CA3AF",marginBottom:16,textAlign:isRTL?"right":"left"}}>{t.signup.hasAccount} <button onClick={()=>nav("login")} style={{color:C.gold,fontWeight:600}}>{t.signup.loginLink}</button></p>
 
-            {/* CERTIFICATE NAME NOTICE */}
+            {/* CERTIFICATE NOTICE */}
             <div style={{padding:14,background:`${C.gold}10`,border:`1.5px solid ${C.gold}30`,borderRadius:12,marginBottom:20,display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:18,flexShrink:0}}>🎓</span>
               <p style={{fontSize:13,color:C.goldD,lineHeight:1.7,textAlign:isRTL?"right":"left"}}>
                 {isRTL
-                  ? "الاسم الأول والأخير اللذان تدخلهما سيظهران على شهادة الإتمام. تأكد من كتابتهما بشكل صحيح — لا يمكن تعديلهما لاحقاً."
-                  : "Your first and last name will appear on your course certificates. Please enter your full legal name — this cannot be changed later."}
+                  ? "الاسم الأول والأخير اللذان تدخلهما سيظهران على شهادة الإتمام. تأكد من كتابتهما بشكل صحيح."
+                  : "Your first and last name will appear on your course certificates. Please enter your full legal name."}
               </p>
             </div>
-            {err && <div style={S.errBox}>{err}</div>}
+
+            {err && (
+              <div style={{padding:"12px 16px",background:errIsLogin?`${C.gold}10`:C.dangerBg,border:`1.5px solid ${errIsLogin?C.gold:C.danger}30`,borderRadius:10,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+                <p style={{fontSize:13,color:errIsLogin?C.goldD:C.danger,flex:1}}>{err}</p>
+                {errIsLogin && (
+                  <button type="button" onClick={()=>nav("login")}
+                    style={{padding:"7px 16px",background:C.gold,color:"#fff",borderRadius:8,fontSize:13,fontWeight:700,flexShrink:0,whiteSpace:"nowrap"}}>
+                    {isRTL?"تسجيل الدخول":"Sign In"}
+                  </button>
+                )}
+              </div>
+            )}
             <form onSubmit={go}>
-              {/* FIRST + LAST NAME */}
+              {/* FIRST + LAST */}
               <div className="name-grid" style={{marginBottom:14}}>
                 <div>
                   <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.firstName} *</label>
@@ -1855,7 +1954,7 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
               <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.email} *</label>
               <input required type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={f.email} onChange={e=>setF({...f,email:e.target.value})} style={{...S.input,marginBottom:14,textAlign:isRTL?"right":"left"}}/>
 
-              {/* PHONE — mandatory */}
+              {/* PHONE */}
               <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.phone} *</label>
               <div style={{position:"relative",marginBottom:14}}>
                 <span style={{position:"absolute",[isRTL?"right":"left"]:14,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#9CA3AF",pointerEvents:"none",lineHeight:1}}>🇸🇦 +966</span>
@@ -1866,9 +1965,30 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
 
               {/* PASSWORD */}
               <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.signup.password} *</label>
-              <input required type="password" autoComplete="new-password" placeholder={isRTL?"8 أحرف على الأقل":"Min. 8 characters"} value={f.password} onChange={e=>setF({...f,password:e.target.value})} style={{...S.input,textAlign:isRTL?"right":"left"}}/>
+              <input required type="password" autoComplete="new-password" placeholder={isRTL?"8 أحرف على الأقل":"Min. 8 characters"}
+                value={f.password} onChange={e=>setF({...f,password:e.target.value})}
+                style={{...S.input,marginBottom:14,textAlign:isRTL?"right":"left",
+                  borderColor: f.password && f.confirm && f.password!==f.confirm ? C.danger : "#E8E4DD"}}/>
 
-              <button type="submit" style={{...S.btnPrimary,width:"100%",justifyContent:"center",marginTop:20,marginBottom:16,padding:"15px 0",fontSize:15}}>{t.signup.btn}</button>
+              {/* CONFIRM PASSWORD */}
+              <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>
+                {isRTL?"تأكيد كلمة المرور *":"Confirm Password *"}
+              </label>
+              <div style={{position:"relative",marginBottom:16}}>
+                <input required type="password" autoComplete="new-password" placeholder={isRTL?"أعد كتابة كلمة المرور":"Re-enter your password"}
+                  value={f.confirm} onChange={e=>setF({...f,confirm:e.target.value})}
+                  style={{...S.input,textAlign:isRTL?"right":"left",width:"100%",
+                    borderColor: f.confirm && f.password!==f.confirm ? C.danger : f.confirm && f.password===f.confirm ? C.success : "#E8E4DD"}}/>
+                {f.confirm && (
+                  <span style={{position:"absolute",[isRTL?"left":"right"]:14,top:"50%",transform:"translateY(-50%)",fontSize:16}}>
+                    {f.password===f.confirm ? "✅" : "❌"}
+                  </span>
+                )}
+              </div>
+
+              <button type="submit" disabled={loading} style={{...S.btnPrimary,width:"100%",justifyContent:"center",marginBottom:16,padding:"15px 0",fontSize:15,opacity:loading?0.7:1}}>
+                {loading ? (isRTL?"جارٍ الإنشاء...":"Creating account...") : t.signup.btn}
+              </button>
             </form>
             <p style={{fontSize:11,color:"#9CA3AF",textAlign:"center",lineHeight:1.7}}>{t.signup.terms}</p>
             <div style={S.divider}><span style={{position:"relative",background:C.bg,padding:"0 16px",fontSize:12,color:"#9CA3AF"}}>{t.login.orWith}</span></div>
@@ -3102,6 +3222,9 @@ function AdminSettings({ onSiteNameChange }) {
   const [notifPay,    setNP]      = useState(true);
   const [notifReport, setNR]      = useState(false);
 
+  // EmailJS config
+  const [ejs, setEjs] = useState(()=>ls("orb_emailjs",{serviceId:"",templateId:"",publicKey:""}));
+  const updateEjs = (k,v) => setEjs(p=>({...p,[k]:v}));
   // OAuth credentials
   const [oauth, setOauth] = useState(()=>ls("orb_oauth",{googleClientId:"485439031935-tqt4qasj02os6u7pd05rqn902hck6u1c.apps.googleusercontent.com",xClientId:"",linkedinClientId:""}));
   const updateOauth = (k,v) => setOauth(p=>({...p,[k]:v}));
@@ -3111,6 +3234,7 @@ function AdminSettings({ onSiteNameChange }) {
     ss("orb_vat", vat);
     ss("orb_amazonId", amazonId);
     ss("orb_oauth", oauth);
+    ss("orb_emailjs", ejs);
     document.title = siteName;
     onSiteNameChange?.(siteName);   // ← triggers navbar re-render immediately
     setSaved(true);
@@ -3160,6 +3284,26 @@ function AdminSettings({ onSiteNameChange }) {
         <input placeholder="your-linkedin-client-id" value={oauth.linkedinClientId||""} onChange={e=>updateOauth("linkedinClientId",e.target.value)} style={S.input}/>
         <p style={{fontSize:11,color:"#9CA3AF",marginTop:6}}>Get from <strong>developer.linkedin.com</strong> → My Apps → Auth tab → Client ID. LinkedIn OAuth requires a backend server to complete the token exchange.</p>
       </div>
+    </div>
+
+    {/* EMAIL SERVICE (EmailJS) */}
+    <div style={{background:"#fff",padding:32,borderRadius:16,border:"1px solid rgba(45,51,71,0.07)",marginBottom:24}}>
+      <h2 style={{fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Email Service (Activation Emails)</h2>
+      <p style={{fontSize:13,color:"#9CA3AF",marginBottom:20}}>Used to send account activation emails to new students. Set up free at <strong>emailjs.com</strong></p>
+      <div style={{padding:14,background:`${ejs.serviceId&&ejs.templateId&&ejs.publicKey?C.successBg:C.dangerBg}`,borderRadius:10,marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:16}}>{ejs.serviceId&&ejs.templateId&&ejs.publicKey?"✅":"⚠️"}</span>
+        <p style={{fontSize:13,fontWeight:600,color:ejs.serviceId&&ejs.templateId&&ejs.publicKey?C.success:C.danger}}>
+          {ejs.serviceId&&ejs.templateId&&ejs.publicKey?"EmailJS is configured — activation emails will be sent":"EmailJS not configured — activation links won't be sent by email"}
+        </p>
+      </div>
+      <div style={{display:"grid",gap:12}}>
+        <div><label style={S.label}>Service ID</label><input placeholder="service_xxxxxxx" value={ejs.serviceId} onChange={e=>updateEjs("serviceId",e.target.value)} style={S.input}/></div>
+        <div><label style={S.label}>Template ID</label><input placeholder="template_xxxxxxx" value={ejs.templateId} onChange={e=>updateEjs("templateId",e.target.value)} style={S.input}/></div>
+        <div><label style={S.label}>Public Key</label><input placeholder="your_public_key" value={ejs.publicKey} onChange={e=>updateEjs("publicKey",e.target.value)} style={S.input}/></div>
+      </div>
+      <p style={{fontSize:11,color:"#9CA3AF",marginTop:10,lineHeight:1.7}}>
+        1. Create free account at emailjs.com → 2. Add Email Service → 3. Create Template with variables: <code>to_name</code>, <code>to_email</code>, <code>activate_url</code>, <code>platform</code> → 4. Paste IDs above
+      </p>
     </div>
 
     <div style={{background:"#fff",padding:32,borderRadius:16,border:"1px solid rgba(45,51,71,0.07)",marginBottom:24}}>
