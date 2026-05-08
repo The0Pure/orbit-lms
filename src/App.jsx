@@ -4250,6 +4250,8 @@ function AdminSettings({ onSiteNameChange }) {
   const [notifReport, setNR]      = useState(false);
 
   const [chatbotEnabled, setChatbotEnabled] = useState(()=>ls("orb_chatbot_enabled","1")==="1");
+  // EmailJS / Brevo config
+  const [ejs, setEjs]   = useState(()=>ls("orb_email_cfg",{apiKey:"",senderEmail:"",senderName:"Orbit Learning"}));
   const updateEjs = (k,v) => setEjs(p=>({...p,[k]:v}));
   const [adminNotifEmail, setAdminNotifEmail] = useState(()=>ls("orb_adminEmail",""));
   // OAuth credentials
