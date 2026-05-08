@@ -688,7 +688,7 @@ export default function App() {
 
       {/* ── PAGES ── */}
       <main style={{minHeight:"calc(100vh - 68px)"}}>
-        {page==="home"        && <HomePage nav={nav} navWithCat={navWithCat} courses={pub} t={t} isRTL={isRTL}/>}
+        {page==="home"        && <HomePage nav={nav} navWithCat={navWithCat} courses={pub} t={t} isRTL={isRTL} user={user}/>}
         {page==="courses"     && <CoursesPage courses={pub} nav={nav} initCat={catFilter} setCatFilter={setCatFilter} t={t} isRTL={isRTL}/>}
         {page==="course-detail" && selCourse && <CourseDetailPage course={selCourse} nav={nav} user={user} handleEnroll={handleEnroll} t={t} isRTL={isRTL}/>}
         {page==="course-learn"  && selCourse && <CourseLearningPage course={selCourse} user={user} nav={nav} t={t} isRTL={isRTL}/>}
@@ -934,7 +934,14 @@ function PaymentModal({ course, onClose, onPay, t }) {
 // ═══════════════════════════════════════════
 // HOME PAGE
 // ═══════════════════════════════════════════
-function HomePage({ nav, navWithCat, courses, t, isRTL }) {
+function HomePage({ nav, navWithCat, courses, t, isRTL, user }) {
+  // Free courses = courses where price is 0 or free flag
+  const freeCourses = courses.filter(c => Number(c.price)===0 || c.free===true);
+  const handleBrowseFree = () => {
+    // If free courses exist go to courses page; caller can filter — just nav to courses
+    // We always nav to courses; if free exist they'll appear when filtering price=0
+    nav("courses");
+  };
   const featured = courses.slice(0,3);
   const cats = CATEGORIES.map(n=>({name:n,count:courses.filter(c=>c.category===n).length})).filter(c=>c.count>0);
 
@@ -946,8 +953,14 @@ function HomePage({ nav, navWithCat, courses, t, isRTL }) {
         <h1 style={{...S.heroTitle,fontFamily:isRTL?"'Cairo',serif":"'Playfair Display',serif"}}>{t.hero.title.split("\n").map((line,i)=><span key={i}>{line}{i<t.hero.title.split("\n").length-1&&<br/>}</span>)}</h1>
         <p style={S.heroSub}>{t.hero.sub}</p>
         <div style={S.heroAct}>
-          <button onClick={()=>nav("courses")} style={S.btnPrimary}>{t.hero.cta1}</button>
-          <button onClick={()=>nav("signup")}  style={S.btnSec}>{t.hero.cta2}</button>
+          {/* CTA 1: Sign up if not logged in, go to dashboard if logged in */}
+          <button onClick={()=>nav(user?"dashboard":"signup")} style={S.btnPrimary}>
+            {user ? (isRTL?"متابعة التعلم →":"Continue Learning →") : t.hero.cta1}
+          </button>
+          {/* CTA 2: Browse free courses if any exist, else browse all courses */}
+          <button onClick={()=>nav("courses")} style={S.btnSec}>
+            {freeCourses.length>0 ? t.hero.cta2 : (isRTL?"تصفح جميع الكورسات":"Browse All Courses")}
+          </button>
         </div>
         <div style={S.heroStats}>
           {t.stats.map((s,i)=>(
