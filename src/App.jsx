@@ -2031,7 +2031,17 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
         </p>
 
         {/* FALLBACK: show link directly if EmailJS not set up */}
-        
+        {activationUrl && (
+          <div style={{background:C.bg,border:`1.5px solid ${C.gold}40`,borderRadius:12,padding:"16px 20px",marginBottom:20,textAlign:"left"}}>
+            <p style={{fontSize:12,fontWeight:700,color:"#9CA3AF",marginBottom:8,textAlign:"center"}}>
+              {isRTL?"أو انقر على الرابط أدناه مباشرةً:":"Or click the link below directly:"}
+            </p>
+            <a href={activationUrl}
+              style={{display:"block",padding:"12px 20px",background:C.gold,color:"#fff",borderRadius:10,fontSize:14,fontWeight:700,textAlign:"center",textDecoration:"none",wordBreak:"break-all"}}>
+              ✅ {isRTL?"تفعيل حسابي الآن":"Activate My Account Now"}
+            </a>
+          </div>
+        )}
 
         <button onClick={()=>nav("login")} style={{...S.btnPrimary,margin:"0 auto",padding:"12px 32px",fontSize:15}}>
           {isRTL?"العودة لتسجيل الدخول":"Back to Sign In"}
@@ -2417,8 +2427,8 @@ function HelpPage({ nav, t }) {
     {q:"Do courses expire?",                   a:"No. Once enrolled, you have lifetime access to the course content including any future updates."},
   ];
   const contacts = isRTL
-    ? [{icon:"✉️",l:"البريد الإلكتروني",v:"linkybinky9@gmail.com"},{icon:"💬",l:"الدردشة المباشرة",v:"متاح داخل التطبيق"}]
-    : [{icon:"✉️",l:"Email",v:"linkybinky9@gmail.com"},{icon:"💬",l:"Live Chat",v:"Available in-app"}];
+    ? [{icon:"✉️",l:"البريد الإلكتروني",v:"support@orbit.sa"},{icon:"💬",l:"الدردشة المباشرة",v:"متاح داخل التطبيق"}]
+    : [{icon:"✉️",l:"Email",v:"support@orbit.sa"},{icon:"💬",l:"Live Chat",v:"Available in-app"}];
   return (
     <StaticPage title={isRTL?"مركز المساعدة":"Help Center"} isRTL={isRTL}>
       <div style={{background:"#fff",borderRadius:20,padding:40,border:"1px solid rgba(45,51,71,0.07)",marginBottom:32}}>
@@ -2468,14 +2478,14 @@ function PrivacyPage({ nav, t }) {
     {h:"كيف نستخدم معلوماتك",           b:"تُستخدم بياناتك لتقديم خدماتنا، ومعالجة المدفوعات، وإرسال تحديثات الكورسات، وتحسين تجربة المنصة."},
     {h:"مشاركة البيانات",               b:"لا نبيع بياناتك الشخصية. نشارك البيانات فقط مع معالجي الدفع ومزودي الخدمات اللازمين لتقديم خدماتنا."},
     {h:"الاحتفاظ بالبيانات",            b:"نحتفظ ببياناتك طالما حسابك نشط. يمكنك طلب الحذف في أي وقت عبر التواصل مع الدعم."},
-    {h:"حقوقك",                         b:"لديك الحق في الوصول إلى بياناتك الشخصية وتصحيحها أو حذفها. تواصل معنا على linkybinky9@gmail.com لأي طلبات."},
+    {h:"حقوقك",                         b:"لديك الحق في الوصول إلى بياناتك الشخصية وتصحيحها أو حذفها. تواصل معنا على support@orbit.sa لأي طلبات."},
     {h:"الأمان",                         b:"نستخدم تشفير SSL بقوة 256 بت ونتبع أفضل ممارسات الصناعة لحماية معلوماتك."},
   ] : [
     {h:"Information We Collect",        b:"We collect information you provide directly (name, email, payment info) and usage data to improve our platform."},
     {h:"How We Use Your Information",   b:"Your data is used to provide our services, process payments, send course updates, and improve the platform experience."},
     {h:"Data Sharing",                  b:"We do not sell your personal data. We share data only with payment processors and service providers necessary to deliver our services."},
     {h:"Data Retention",                b:"We retain your data as long as your account is active. You may request deletion at any time by contacting support."},
-    {h:"Your Rights",                   b:"You have the right to access, correct, or delete your personal data. Contact linkybinky9@gmail.com for any data requests."},
+    {h:"Your Rights",                   b:"You have the right to access, correct, or delete your personal data. Contact support@orbit.sa for any data requests."},
     {h:"Security",                      b:"We use 256-bit SSL encryption and follow industry best practices to protect your information."},
   ];
   return (
@@ -3131,59 +3141,152 @@ function AdminUsers({ users, addUserAdmin, updateUser, deleteUser }) {
   const [form,     setForm]     = useState({firstName:"",lastName:"",email:"",password:"",role:"student"});
   const [err,      setErr]      = useState("");
   const [delId,    setDelId]    = useState(null);
+  const [filter,   setFilter]   = useState("all"); // all | active | pending
+  const [search,   setSearch]   = useState("");
 
-  const openNew  = ()=>{ setForm({firstName:"",lastName:"",email:"",password:"",role:"student"}); setEditUser(null); setErr(""); setShowForm(true); };
-  const openEdit = u=>{ setEditUser(u); setForm({firstName:u.firstName||u.name?.split(" ")[0]||"",lastName:u.lastName||u.name?.split(" ").slice(1).join(" ")||"",email:u.email,password:"",role:u.role||"student"}); setErr(""); setShowForm(true); };
+  // Reload fresh so verified changes reflect immediately
+  const [localUsers, setLocalUsers] = useState(()=>ls("orb_users",[]));
+  const reload = () => setLocalUsers(ls("orb_users",[]));
+  useEffect(()=>{ reload(); },[users]);
+
+  const activateUser = (id) => {
+    const updated = localUsers.map(u => u.id===id ? {...u, verified:true, token:""} : u);
+    ss("orb_users", updated);
+    setLocalUsers(updated);
+    // Also update main users state
+    updateUser(id, {verified:true, token:""});
+  };
+
+  const openNew  = () => { setForm({firstName:"",lastName:"",email:"",password:"",role:"student"}); setEditUser(null); setErr(""); setShowForm(true); };
+  const openEdit = u => { setEditUser(u); setForm({firstName:u.firstName||u.name?.split(" ")[0]||"",lastName:u.lastName||u.name?.split(" ").slice(1).join(" ")||"",email:u.email,password:"",role:u.role||"student"}); setErr(""); setShowForm(true); };
 
   const handleSubmit = (e) => {
     e.preventDefault(); setErr("");
     if (editUser) {
       updateUser(editUser.id,{...form,name:`${form.firstName} ${form.lastName}`,password:form.password||editUser.password});
-      setShowForm(false);
+      setShowForm(false); reload();
     } else {
-      const ok = addUserAdmin({...form,name:`${form.firstName} ${form.lastName}`});
+      const ok = addUserAdmin({...form,name:`${form.firstName} ${form.lastName}`,verified:true});
       if (!ok) { setErr("Email already exists"); return; }
-      setShowForm(false);
+      setShowForm(false); reload();
     }
   };
 
-  const roleColors = { admin:"#7C3AED", instructor:C.teal, student:C.navy, moderator:C.slate };
+  // Filter users
+  const filtered = localUsers.filter(u => {
+    const matchFilter = filter==="all" || (filter==="active" && u.verified!==false) || (filter==="pending" && u.verified===false);
+    const matchSearch = !search || u.name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase());
+    return matchFilter && matchSearch;
+  });
+
+  const total   = localUsers.length;
+  const active  = localUsers.filter(u=>u.verified!==false).length;
+  const pending = localUsers.filter(u=>u.verified===false).length;
+
+  const StatusBadge = ({verified}) => verified===false
+    ? <span style={{fontSize:11,padding:"3px 10px",background:"#FEF3C7",color:"#D97706",borderRadius:20,fontWeight:700,whiteSpace:"nowrap"}}>⏳ Pending</span>
+    : <span style={{fontSize:11,padding:"3px 10px",background:C.successBg,color:C.success,borderRadius:20,fontWeight:700,whiteSpace:"nowrap"}}>✓ Active</span>;
 
   return <div style={{padding:40}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:32,flexWrap:"wrap",gap:16}}>
-      <div><h1 style={S.pageTitle}>Users</h1><p style={{...S.pageSub,marginTop:6}}>{users.length} registered users</p></div>
+    {/* HEADER */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24,flexWrap:"wrap",gap:16}}>
+      <div>
+        <h1 style={S.pageTitle}>Users</h1>
+        <p style={{...S.pageSub,marginTop:6}}>{total} total · {active} active · {pending} pending activation</p>
+      </div>
       <button onClick={openNew} style={S.btnPrimary}><I.UserPlus/> Add User</button>
     </div>
 
-    {users.length>0
-      ?<div style={{background:"#fff",borderRadius:16,border:"1px solid rgba(45,51,71,0.07)",overflow:"auto"}}>
-        <table style={{width:"100%",fontSize:14,borderCollapse:"collapse",minWidth:600}}>
-          <thead><tr style={{background:"#F5F2ED",borderBottom:"1px solid #E8E4DD"}}>
-            {["Name","Email","Role","Enrolled","Actions"].map(h=><th key={h} style={{padding:"12px 20px",textAlign:"left",fontWeight:600,color:"#6B7280",whiteSpace:"nowrap"}}>{h}</th>)}
-          </tr></thead>
-          <tbody>
-            {users.map(u=>(
-              <tr key={u.id} style={{borderBottom:"1px solid #F0ECE5"}}>
-                <td style={{padding:"16px 20px",fontWeight:600,color:C.navy}}>{u.name}</td>
-                <td style={{padding:"16px 20px",color:"#6B7280"}}>{u.email}</td>
-                <td style={{padding:"16px 20px"}}><RoleBadge role={u.role}/></td>
-                <td style={{padding:"16px 20px",color:"#6B7280"}}>{u.enrolledCourses?.length||0}</td>
-                <td style={{padding:"16px 20px"}}>
-                  <div style={{display:"flex",gap:8}}>
-                    <button onClick={()=>openEdit(u)} style={{padding:"6px 14px",background:C.gold,color:"#fff",borderRadius:6,fontSize:12,fontWeight:600}}>Edit</button>
-                    <button onClick={()=>setDelId(u.id)} style={{padding:"6px 14px",background:C.danger,color:"#fff",borderRadius:6,fontSize:12,fontWeight:600}}>Delete</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      :<div style={{background:"#fff",padding:48,borderRadius:16,textAlign:"center",border:"1px solid rgba(45,51,71,0.07)"}}><p style={{color:"#9CA3AF"}}>No users yet</p></div>}
+    {/* STATS CARDS */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:24}}>
+      {[
+        {label:"Total Users",    val:total,   color:C.navy,  bg:"#F5F2ED"},
+        {label:"Active",         val:active,  color:C.success,bg:C.successBg},
+        {label:"Pending Activation", val:pending, color:"#D97706",bg:"#FEF3C7"},
+      ].map((s,i)=>(
+        <div key={i} style={{background:s.bg,borderRadius:12,padding:"16px 20px",border:`1px solid ${s.color}20`}}>
+          <p style={{fontSize:26,fontWeight:800,color:s.color,fontFamily:"'Playfair Display',serif"}}>{s.val}</p>
+          <p style={{fontSize:13,color:s.color,opacity:0.75,marginTop:2}}>{s.label}</p>
+        </div>
+      ))}
+    </div>
 
-    {/* ADD/EDIT USER MODAL */}
+    {/* SEARCH + FILTER BAR */}
+    <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+      <div style={{...S.searchBox,flex:1,minWidth:200}}>
+        <I.Search/>
+        <input placeholder="Search by name or email..." value={search} onChange={e=>setSearch(e.target.value)} style={S.searchIn}/>
+      </div>
+      <div style={{display:"flex",gap:6}}>
+        {[["all","All"],["active","✓ Active"],["pending","⏳ Pending"]].map(([v,l])=>(
+          <button key={v} onClick={()=>setFilter(v)}
+            style={{padding:"8px 16px",borderRadius:8,fontSize:13,fontWeight:filter===v?700:500,
+              background:filter===v?(v==="pending"?"#FEF3C7":v==="active"?C.successBg:C.navy):"#fff",
+              color:filter===v?(v==="pending"?"#D97706":v==="active"?C.success:"#fff"):C.navy,
+              border:`1px solid ${filter===v?(v==="pending"?"#D97706":v==="active"?C.success:C.navy):"#E8E4DD"}`}}>
+            {l}
+          </button>
+        ))}
+      </div>
+      <button onClick={reload} style={{padding:"8px 14px",background:C.bg,borderRadius:8,fontSize:12,color:C.teal,fontWeight:600,border:"1px solid #E8E4DD"}}>↻ Refresh</button>
+    </div>
+
+    {/* USERS TABLE */}
+    {filtered.length > 0
+      ? <div style={{background:"#fff",borderRadius:16,border:"1px solid rgba(45,51,71,0.07)",overflow:"auto"}}>
+          <table style={{width:"100%",fontSize:14,borderCollapse:"collapse",minWidth:700}}>
+            <thead>
+              <tr style={{background:"#F5F2ED",borderBottom:"1px solid #E8E4DD"}}>
+                {["Name","Email","Status","Role","Enrolled","Actions"].map(h=>(
+                  <th key={h} style={{padding:"12px 20px",textAlign:"left",fontWeight:600,color:"#6B7280",whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(u=>(
+                <tr key={u.id} style={{borderBottom:"1px solid #F0ECE5",background:u.verified===false?"#FFFBEB":"#fff",transition:"background 0.15s"}}>
+                  <td style={{padding:"14px 20px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <div style={{width:34,height:34,borderRadius:"50%",background:u.verified===false?"#FDE68A":C.creamL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:u.verified===false?"#D97706":C.navy,flexShrink:0}}>
+                        {u.name?.[0]?.toUpperCase()||"?"}
+                      </div>
+                      <span style={{fontWeight:600,color:C.navy}}>{u.name}</span>
+                    </div>
+                  </td>
+                  <td style={{padding:"14px 20px",color:"#6B7280"}}>{u.email}</td>
+                  <td style={{padding:"14px 20px"}}><StatusBadge verified={u.verified}/></td>
+                  <td style={{padding:"14px 20px"}}><RoleBadge role={u.role}/></td>
+                  <td style={{padding:"14px 20px",color:"#6B7280",textAlign:"center"}}>{u.enrolledCourses?.length||0}</td>
+                  <td style={{padding:"14px 20px"}}>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      {u.verified===false && (
+                        <button onClick={()=>activateUser(u.id)}
+                          style={{padding:"6px 12px",background:C.success,color:"#fff",borderRadius:6,fontSize:12,fontWeight:700,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:4}}>
+                          ✓ Activate
+                        </button>
+                      )}
+                      <button onClick={()=>openEdit(u)} style={{padding:"6px 12px",background:C.gold,color:"#fff",borderRadius:6,fontSize:12,fontWeight:600}}>Edit</button>
+                      <button onClick={()=>setDelId(u.id)} style={{padding:"6px 12px",background:C.danger,color:"#fff",borderRadius:6,fontSize:12,fontWeight:600}}>Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      : <div style={{background:"#fff",padding:48,borderRadius:16,textAlign:"center",border:"1px solid rgba(45,51,71,0.07)"}}>
+          <p style={{color:"#9CA3AF",fontSize:15}}>
+            {filter==="pending" ? "No pending users — all accounts are activated ✓" :
+             filter==="active"  ? "No active users yet" : "No users yet"}
+          </p>
+        </div>}
+
+    {/* ADD/EDIT MODAL */}
     {showForm && <div style={S.modalOv} onClick={()=>setShowForm(false)}><div style={{...S.modal,maxWidth:480}} onClick={e=>e.stopPropagation()}>
-      <div style={S.modalHead}><h2 style={{fontSize:18,fontWeight:700,color:C.navy}}>{editUser?"Edit User":"Add User"}</h2><button onClick={()=>setShowForm(false)} style={{color:"#9CA3AF"}}><I.X/></button></div>
+      <div style={S.modalHead}>
+        <h2 style={{fontSize:18,fontWeight:700,color:C.navy}}>{editUser?"Edit User":"Add User"}</h2>
+        <button onClick={()=>setShowForm(false)} style={{color:"#9CA3AF"}}><I.X/></button>
+      </div>
       <div style={{padding:"24px 28px"}}>
         {err && <div style={S.errBox}>{err}</div>}
         <form onSubmit={handleSubmit}>
@@ -3197,18 +3300,16 @@ function AdminUsers({ users, addUserAdmin, updateUser, deleteUser }) {
           <input type="password" required={!editUser} value={form.password} onChange={e=>setForm({...form,password:e.target.value})} style={{...S.input,marginBottom:16}}/>
           <label style={S.label}>Role</label>
           <select value={form.role} onChange={e=>setForm({...form,role:e.target.value})} style={{...S.input,marginBottom:24}}>
-            {["student","instructor","moderator","customer_service"].map(r=><option key={r} value={r}>{r==="customer_service"?"Customer Service":r[0].toUpperCase()+r.slice(1)}</option>)}
+            {["student","instructor","moderator","customer_service"].map(r=>(
+              <option key={r} value={r}>{r==="customer_service"?"Customer Service":r[0].toUpperCase()+r.slice(1)}</option>
+            ))}
           </select>
-          {/* ROLE PREVIEW */}
-          <div style={{padding:16,background:C.bg,borderRadius:12,marginBottom:24,display:"flex",alignItems:"center",gap:12}}>
-            <I.Info/>
-            <div style={{fontSize:13,color:"#6B7280"}}>
-              <strong style={{color:C.navy}}>Role permissions:</strong>
-              {form.role==="student"    && " Can browse and enroll in courses."}
-              {form.role==="instructor" && " Can create and manage courses assigned to them."}
-              {form.role==="moderator"  && " Can review content and manage users."}
-              {form.role==="customer_service" && " Can view and respond to customer inquiries in the chatbot."}
-            </div>
+          <div style={{padding:16,background:C.bg,borderRadius:12,marginBottom:24,fontSize:13,color:"#6B7280"}}>
+            <strong style={{color:C.navy}}>Role: </strong>
+            {form.role==="student"         && "Can browse and enroll in courses."}
+            {form.role==="instructor"      && "Can create and manage courses."}
+            {form.role==="moderator"       && "Can review content and manage users."}
+            {form.role==="customer_service"&& "Can view and respond to customer inquiries."}
           </div>
           <div style={{display:"flex",gap:12}}>
             <button type="button" onClick={()=>setShowForm(false)} style={{flex:1,padding:13,background:"#E8E4DD",borderRadius:10,fontWeight:600}}>Cancel</button>
@@ -3218,7 +3319,15 @@ function AdminUsers({ users, addUserAdmin, updateUser, deleteUser }) {
       </div>
     </div></div>}
 
-    {delId && <div style={S.modalOv} onClick={()=>setDelId(null)}><div style={{...S.modal,maxWidth:400,textAlign:"center"}} onClick={e=>e.stopPropagation()}><h3 style={{fontSize:20,fontWeight:700,padding:"28px 28px 12px"}}>Delete User?</h3><p style={{color:"#6B7280",padding:"0 28px 24px"}}>All their data will be removed.</p><div style={{display:"flex",gap:12,padding:"0 28px 28px"}}><button onClick={()=>setDelId(null)} style={{flex:1,padding:12,background:"#E8E4DD",borderRadius:10,fontWeight:600}}>Cancel</button><button onClick={()=>{deleteUser(delId);setDelId(null);}} style={{flex:1,padding:12,background:C.danger,color:"#fff",borderRadius:10,fontWeight:600}}>Delete</button></div></div></div>}
+    {/* DELETE CONFIRM */}
+    {delId && <div style={S.modalOv} onClick={()=>setDelId(null)}><div style={{...S.modal,maxWidth:400,textAlign:"center"}} onClick={e=>e.stopPropagation()}>
+      <h3 style={{fontSize:20,fontWeight:700,padding:"28px 28px 12px"}}>Delete User?</h3>
+      <p style={{color:"#6B7280",padding:"0 28px 24px"}}>This will permanently remove the user and all their data.</p>
+      <div style={{display:"flex",gap:12,padding:"0 28px 28px"}}>
+        <button onClick={()=>setDelId(null)} style={{flex:1,padding:12,background:"#E8E4DD",borderRadius:10,fontWeight:600}}>Cancel</button>
+        <button onClick={()=>{deleteUser(delId);setDelId(null);reload();}} style={{flex:1,padding:12,background:C.danger,color:"#fff",borderRadius:10,fontWeight:600}}>Delete</button>
+      </div>
+    </div></div>}
   </div>;
 }
 
@@ -3711,12 +3820,12 @@ function ChatbotWidget({ isRTL }) {
     "كيف أسجّل": "تصفح الكورسات، اختر الكورس المناسب، ثم اضغط 'اشترك الآن' واتبع خطوات الدفع الآمن.",
     "الدفع": "نقبل البطاقات الائتمانية، Apple Pay، STC Pay، وAmazon Pay. جميع الأسعار تشمل ضريبة القيمة المضافة 15%.",
     "استرداد": "نقدم ضمان استرداد كامل خلال 7 أيام من الشراء دون أي شروط.",
-    "دعم": "يمكنك التواصل مع فريقنا على linkybinky9@gmail.com — الأحد إلى الخميس، 9ص–6م.",
+    "دعم": "يمكنك التواصل مع فريقنا على support@orbit.sa — الأحد إلى الخميس، 9ص–6م.",
   } : {
     "enroll": "Browse courses, choose the right one, then click 'Enroll Now' and follow the secure payment steps.",
     "payment": "We accept credit cards, Apple Pay, STC Pay, and Amazon Pay. All prices include 15% VAT.",
     "refund": "We offer a full 7-day money-back guarantee, no questions asked.",
-    "support": "You can reach our team at linkybinky9@gmail.com — Sunday to Thursday, 9am–6pm.",
+    "support": "You can reach our team at support@orbit.sa — Sunday to Thursday, 9am–6pm.",
   };
 
   const sendMsg = (text) => {
@@ -3727,7 +3836,7 @@ function ChatbotWidget({ isRTL }) {
     setTyping(true);
     setTimeout(()=>{
       const lower = text.toLowerCase();
-      let reply = isRTL ? "شكراً لرسالتك! سيتواصل معك فريق الدعم قريباً على linkybinky9@gmail.com" : "Thanks for your message! Our support team will reach you soon at linkybinky9@gmail.com";
+      let reply = isRTL ? "شكراً لرسالتك! سيتواصل معك فريق الدعم قريباً على support@orbit.sa" : "Thanks for your message! Our support team will reach you soon at support@orbit.sa";
       for (const [key, val] of Object.entries(autoReplies)) {
         if (lower.includes(key)) { reply = val; break; }
       }
