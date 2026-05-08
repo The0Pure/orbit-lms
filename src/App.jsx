@@ -316,6 +316,7 @@ const I = {
   Mail:     ()=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
   Briefcase:()=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>,
   Info:     ()=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+  Tag:      ()=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
 };
 
 // ═══════════════════════════════════════════
@@ -337,40 +338,118 @@ const RoleBadge = ({ role }) => {
 // EMAIL UTILITY — EmailJS wrapper
 // Supports: "activation" | "career_applicant" | "career_admin"
 // ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// EMAIL UTILITY — Brevo (formerly Sendinblue)
+// 300 free emails/day, no template system needed
+// Just needs API Key + sender email in Admin Settings
+// ═══════════════════════════════════════════
 async function sendEmail(type, params) {
-  const cfg = ls("orb_emailjs", { serviceId:"", templateId:"", templateCareer:"", templateAdmin:"", publicKey:"" });
-  if (!cfg.serviceId || !cfg.publicKey) {
-    console.warn(`[Orbit Email] EmailJS not configured. Would send "${type}" to ${params.to_email}`);
+  const cfg = ls("orb_email_cfg", { provider:"brevo", apiKey:"", senderEmail:"", senderName:"Orbit Learning" });
+
+  if (!cfg.apiKey || !cfg.senderEmail) {
+    console.warn(`[Orbit Email] Not configured. Type="${type}" to="${params.to_email}"`);
     return false;
   }
 
-  // Choose template based on type
-  const templateMap = {
-    activation:      cfg.templateId,
-    career_applicant: cfg.templateCareer || cfg.templateId,
-    career_admin:    cfg.templateAdmin   || cfg.templateId,
-  };
-  const templateId = templateMap[type];
-  if (!templateId) { console.warn(`[Orbit Email] No template for type: ${type}`); return false; }
+  // Build email HTML based on type
+  const platform = params.platform || ls("orb_siteName","Orbit Learning");
+  const accent   = "#B8965A";
+  const navy     = "#2D3347";
+
+  const htmlBody = (title, body, btnText, btnUrl) => `
+    <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:560px;margin:0 auto;background:#F5F2ED;padding:32px 16px">
+      <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 16px rgba(45,51,71,0.08)">
+        <div style="background:${navy};padding:28px 32px;text-align:center">
+          <h1 style="color:#D5CFC1;font-size:22px;font-weight:700;margin:0;letter-spacing:-0.5px">${platform}</h1>
+        </div>
+        <div style="padding:32px">
+          <h2 style="color:${navy};font-size:20px;font-weight:700;margin:0 0 16px">${title}</h2>
+          <div style="color:#4A5568;font-size:15px;line-height:1.8">${body}</div>
+          ${btnText && btnUrl ? `
+          <div style="text-align:center;margin:28px 0">
+            <a href="${btnUrl}" style="display:inline-block;padding:14px 36px;background:${accent};color:#fff;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none">${btnText}</a>
+          </div>` : ""}
+        </div>
+        <div style="background:#F5F2ED;padding:16px 32px;text-align:center;font-size:12px;color:#9CA3AF">
+          © ${new Date().getFullYear()} ${platform}. All rights reserved.
+        </div>
+      </div>
+    </div>`;
+
+  let subject, html;
+
+  if (type === "activation") {
+    subject = `Activate your ${platform} account`;
+    html = htmlBody(
+      `Welcome to ${platform}! 🎓`,
+      `<p>Hi <strong>${params.to_name}</strong>,</p>
+       <p>Thank you for signing up. Click the button below to activate your account and start learning.</p>
+       <p style="color:#9CA3AF;font-size:13px">This link expires in 24 hours.</p>`,
+      "✅ Activate My Account",
+      params.activate_url
+    );
+  } else if (type === "reset_password") {
+    subject = `Reset your ${platform} password`;
+    html = htmlBody(
+      "Password Reset Request 🔑",
+      `<p>Hi <strong>${params.to_name}</strong>,</p>
+       <p>We received a request to reset your password. Click the button below to create a new password.</p>
+       <p style="color:#9CA3AF;font-size:13px">This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>`,
+      "🔑 Reset My Password",
+      params.reset_url
+    );
+  } else if (type === "career_applicant") {
+    subject = `Application Received – ${params.job_title} at ${platform}`;
+    html = htmlBody(
+      "Application Received ✓",
+      `<p>Hi <strong>${params.to_name}</strong>,</p>
+       <p>Thank you for applying to <strong>${params.job_title}</strong> at ${platform}.</p>
+       <p>We've received your application and will review it carefully. We'll reach out if your profile is a match.</p>
+       <p>Best regards,<br>The ${platform} Team</p>`,
+      null, null
+    );
+  } else if (type === "career_admin") {
+    subject = `New Application: ${params.applicant} → ${params.job_title}`;
+    html = htmlBody(
+      `New Job Application 📋`,
+      `<p><strong>Position:</strong> ${params.job_title}</p>
+       <p><strong>Applicant:</strong> ${params.applicant}</p>
+       <p><strong>Email:</strong> ${params.app_email}</p>
+       <p><strong>Phone:</strong> ${params.app_phone||"—"}</p>
+       <hr style="border:none;border-top:1px solid #E8E4DD;margin:16px 0"/>
+       <p><strong>Cover Letter:</strong><br>${(params.cover||"(none)").replace(/\n/g,"<br>")}</p>
+       <p><strong>CV:</strong> ${params.cv_name||"Not uploaded"}</p>`,
+      "View in Admin Panel",
+      params.admin_url || `${window.location.origin}`
+    );
+  } else {
+    subject = params.subject || `Message from ${platform}`;
+    html = htmlBody(subject, `<p>${(params.message||"").replace(/\n/g,"<br>")}</p>`, null, null);
+  }
 
   try {
-    const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
       method:  "POST",
-      headers: { "Content-Type":"application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "api-key":      cfg.apiKey,
+      },
       body: JSON.stringify({
-        service_id:      cfg.serviceId,
-        template_id:     templateId,
-        user_id:         cfg.publicKey,
-        accessToken:     cfg.privateKey || undefined,
-        template_params: params,
+        sender:  { name: cfg.senderName||platform, email: cfg.senderEmail },
+        to:      [{ email: params.to_email, name: params.to_name||params.to_email }],
+        subject,
+        htmlContent: html,
       }),
     });
-    if (res.ok) { console.info(`[Orbit Email] ✓ Sent "${type}" to ${params.to_email}`); return true; }
+    if (res.ok || res.status===201) {
+      console.info(`[Orbit Email] ✓ Sent "${type}" to ${params.to_email}`);
+      return true;
+    }
     const txt = await res.text();
     console.error(`[Orbit Email] ✗ Failed "${type}": ${res.status} — ${txt}`);
     return false;
   } catch(e) {
-    console.error(`[Orbit Email] ✗ Network error "${type}":`, e);
+    console.error(`[Orbit Email] ✗ Network error:`, e);
     return false;
   }
 }
@@ -393,6 +472,8 @@ export default function App() {
   const [lang,       setLang]           = useState(()=>ls("orb_lang","en"));
   const [siteName,   setSiteNameApp]     = useState(()=>ls("orb_siteName","Orbit Learning"));
   const [activationSuccess, setActivationSuccess] = useState(false);
+  const [resetToken, setResetToken]   = useState(""); // triggers reset modal when set
+  const [resetUserId, setResetUserId] = useState("");
 
   const t   = T[lang] || T.en;
   const isRTL = lang === "ar";
@@ -567,10 +648,15 @@ export default function App() {
   const handleEnroll = (course) => {
     if (!isLogged) { nav("login"); return; }
     if (user.enrolledCourses?.includes(course.id)) { nav("course-learn",course); return; }
+    // Free course — skip payment modal entirely
+    if (course.isFree || Number(course.price)===0) {
+      completePayment(course, "free", null);
+      return;
+    }
     setPayModal(course);
   };
 
-  const completePayment = (course, method) => {
+  const completePayment = (course, method, discount) => {
     const idx = users.findIndex(u=>u.id===user.id);
     if (idx===-1) return;
     const uu=[...users];
@@ -579,9 +665,26 @@ export default function App() {
     const updated={...user,enrolledCourses:uu[idx].enrolledCourses};
     setUser(updated); ss("orb_user",updated);
     updateCourse(course.id,{students:(course.students||0)+1});
-    const order={id:`ord-${Date.now()}`,userId:user.id,userName:user.name,userEmail:user.email,courseId:course.id,courseName:course.title,amount:course.price,method,status:"completed",date:new Date().toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"})};
+    // Calculate final amount paid
+    const subtotal  = Number(course.price)||0;
+    const discAmt   = discount
+      ? discount.type==="percent"
+        ? Math.round(subtotal*(discount.value/100))
+        : Math.min(discount.value,subtotal)
+      : 0;
+    const afterDisc = Math.max(0,subtotal-discAmt);
+    const vat       = Math.round(afterDisc*0.15);
+    const total     = method==="free" ? 0 : afterDisc+vat;
+    const order={
+      id:`ord-${Date.now()}`,userId:user.id,userName:user.name,userEmail:user.email,
+      courseId:course.id,courseName:course.title,
+      originalAmount:subtotal,discountCode:discount?.code||null,discountAmt:discAmt,
+      amount:total,method,status:"completed",
+      date:new Date().toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"})
+    };
     saveOrders([...orders,order]);
     setPayModal(null);
+    if (method==="free") nav("course-learn",course);
   };
 
   // ── ADMIN USER MANAGEMENT ──
@@ -611,6 +714,23 @@ export default function App() {
         setPage("dashboard");
         setActivationSuccess(true);
         setTimeout(()=>setActivationSuccess(false), 6000);
+      }
+    }
+
+    // Handle reset password link: ?reset=TOKEN
+    const resetTk = params.get("reset");
+    if (resetTk) {
+      const allUsers = ls("orb_users",[]);
+      const found    = allUsers.find(u=>u.resetToken===resetTk);
+      if (found && found.resetExpiry > Date.now()) {
+        window.history.replaceState({},"",window.location.pathname);
+        setResetToken(resetTk);
+        setResetUserId(found.id);
+        setPage("login");
+      } else {
+        window.history.replaceState({},"",window.location.pathname);
+        // Expired or invalid — let user request a new one
+        setPage("login");
       }
     }
 
@@ -704,7 +824,7 @@ export default function App() {
       </main>
 
       {/* ── PAYMENT MODAL ── */}
-      {payModal && <PaymentModal course={payModal} onClose={()=>setPayModal(null)} onPay={completePayment} t={t}/>}
+      {payModal && <PaymentModal course={payModal} onClose={()=>setPayModal(null)} onPay={(c,m,d)=>completePayment(c,m,d)} t={t}/>}
 
       {/* ── FOOTER ── */}
       {!isAuth && !isAdm && (
@@ -785,6 +905,14 @@ export default function App() {
         </footer>
       )}
 
+      {/* ── RESET PASSWORD MODAL ── */}
+      {resetToken && <ResetPasswordModal
+        userId={resetUserId}
+        token={resetToken}
+        isRTL={isRTL}
+        onDone={()=>{ setResetToken(""); setResetUserId(""); setPage("login"); }}
+      />}
+
       {/* ── ACTIVATION SUCCESS TOAST ── */}
       {activationSuccess && (
         <div style={{position:"fixed",top:80,left:"50%",transform:"translateX(-50%)",zIndex:9999,background:C.success,color:"#fff",padding:"14px 28px",borderRadius:50,fontSize:15,fontWeight:600,boxShadow:"0 4px 20px rgba(0,0,0,0.15)",display:"flex",alignItems:"center",gap:10,whiteSpace:"nowrap"}}>
@@ -793,7 +921,7 @@ export default function App() {
       )}
 
       {/* ── CHATBOT ── */}
-      {!isAdm && <ChatbotWidget isRTL={isRTL}/>}
+      {!isAdm && ls("orb_chatbot_enabled","1")==="1" && <ChatbotWidget isRTL={isRTL}/>}
 
       <style>{CSS}</style>
     </div>
@@ -804,48 +932,83 @@ export default function App() {
 // PAYMENT MODAL
 // ═══════════════════════════════════════════
 function PaymentModal({ course, onClose, onPay, t }) {
+  const isRTL = ls("orb_lang","en")==="ar";
   const pt = t?.payment || {title:'Enroll in Course',emailLabel:'Email for Invoice',payBtn:'Payment',summary:'Order Summary',subtotal:'Course price',vat:'VAT (15%)',total:'Total',secured:'🔒 Secured · Invoice sent automatically'};
-  const [step,       setStep]       = useState("summary"); // "summary" | "processing" | "done"
-  const [email,      setEmail]      = useState("");
-  const vat   = Math.round((course.price||0)*0.15);
-  const total = (course.price||0)+vat;
+  const [step,     setStep]    = useState("summary");
+  const [email,    setEmail]   = useState("");
+  const [coupon,   setCoupon]  = useState("");
+  const [discount, setDiscount] = useState(null); // { code, type, value, id }
+  const [couponErr,setCouponErr] = useState("");
 
-  // AMAZON PAY: opens real checkout in new tab, registers enrollment
-  const handleAmazonPay = () => {
-    const merchantId = ls("orb_amazonId","");
-    const returnUrl  = encodeURIComponent(window.location.href);
-    const amount     = total.toFixed(2);
-    const desc       = encodeURIComponent(course.title);
-    // Amazon Pay checkout URL (replace with your actual integration endpoint)
-    const amazonUrl  = merchantId
-      ? `https://payments.amazon.com/checkout?merchantId=${merchantId}&amount=${amount}&currency=SAR&description=${desc}&returnUrl=${returnUrl}`
-      : `https://payments.amazon.com/`;
-    window.open(amazonUrl, "_blank", "noopener");
-    // Optimistically enroll (in production: verify via webhook)
-    setStep("processing");
-    setTimeout(()=>{
-      onPay(course, "amazon");
-      setStep("done");
-    }, 800);
+  const isFree = course.isFree || Number(course.price)===0;
+
+  const applyDiscount = () => {
+    setCouponErr("");
+    if (!coupon.trim()) return;
+    const codes = ls("orb_discounts",[]);
+    const found  = codes.find(c=>c.code===coupon.trim().toUpperCase() && c.active);
+    if (!found)                             { setCouponErr(isRTL?"كود غير صحيح أو منتهي":"Invalid or expired code"); return; }
+    if (found.expiry && new Date(found.expiry)<new Date()) { setCouponErr(isRTL?"انتهت صلاحية الكود":"This code has expired"); return; }
+    if (found.maxUses && found.uses>=found.maxUses)        { setCouponErr(isRTL?"تم استخدام الكود بالكامل":"This code has reached its usage limit"); return; }
+    setDiscount(found);
+    setCouponErr("");
   };
 
-  const handlePay = () => {
-    setStep("processing");
-    setTimeout(()=>{
-      onPay(course, "card");
-      setStep("done");
-    }, 1400);
+  const removeDiscount = () => { setDiscount(null); setCoupon(""); setCouponErr(""); };
+
+  const subtotal   = Number(course.price)||0;
+  const discAmt    = discount
+    ? discount.type==="percent"
+      ? Math.round(subtotal*(discount.value/100))
+      : Math.min(discount.value, subtotal)
+    : 0;
+  const afterDisc  = Math.max(0, subtotal - discAmt);
+  const vat        = Math.round(afterDisc*0.15);
+  const total      = afterDisc + vat;
+
+  // Increment discount code usage
+  const burnCode = () => {
+    if (!discount) return;
+    const codes   = ls("orb_discounts",[]);
+    const updated = codes.map(c=>c.id===discount.id ? {...c, uses:(c.uses||0)+1} : c);
+    ss("orb_discounts", updated);
   };
 
-  // AUTO-CLOSE success screen after 2s
+  const handlePay = (method) => {
+    setStep("processing");
+    setTimeout(()=>{ burnCode(); onPay(course, method, discount); setStep("done"); }, 900);
+  };
+
   useEffect(()=>{
-    if (step==="done") {
-      const t = setTimeout(()=>onClose(), 2200);
-      return ()=>clearTimeout(t);
-    }
+    if (step==="done") { const t=setTimeout(()=>onClose(),2200); return ()=>clearTimeout(t); }
   },[step]);
 
-  // SUCCESS SCREEN
+  // FREE COURSE — instant enroll
+  if (isFree) return (
+    <div style={S.modalOv} onClick={onClose}>
+      <div style={{...S.modal,maxWidth:400,textAlign:"center"}} onClick={e=>e.stopPropagation()}>
+        <div style={{padding:"40px 32px"}}>
+          <div style={{fontSize:48,marginBottom:16}}>🎓</div>
+          <h2 style={{fontSize:22,fontWeight:700,color:C.navy,marginBottom:10}}>
+            {isRTL?"كورس مجاني":"Free Course!"}
+          </h2>
+          <p style={{fontSize:14,color:"#6B7280",marginBottom:24,lineHeight:1.7}}>
+            {isRTL
+              ? `سيتم تسجيلك في "${course.titleAr||course.title}" مجاناً`
+              : `You'll be enrolled in "${course.title}" for free`}
+          </p>
+          <button onClick={()=>handlePay("free")}
+            style={{...S.btnPrimary,width:"100%",justifyContent:"center",padding:"15px 0",fontSize:16,background:C.success}}>
+            ✅ {isRTL?"ابدأ التعلم الآن":"Start Learning Now"}
+          </button>
+          <button onClick={onClose} style={{marginTop:12,fontSize:13,color:"#9CA3AF",width:"100%"}}>
+            {isRTL?"إلغاء":"Cancel"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (step==="done") return (
     <div style={S.modalOv}>
       <div style={{...S.modal,maxWidth:360,textAlign:"center",border:"none"}}>
@@ -853,36 +1016,35 @@ function PaymentModal({ course, onClose, onPay, t }) {
           <div style={{width:72,height:72,borderRadius:"50%",background:`${C.success}15`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",color:C.success}}>
             <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20,6 9,17 4,12"/></svg>
           </div>
-          <h2 style={{fontSize:22,fontWeight:700,color:C.navy,marginBottom:10}}>Payment Successful!</h2>
+          <h2 style={{fontSize:22,fontWeight:700,color:C.navy,marginBottom:10}}>
+            {isRTL?"تمت العملية بنجاح!":"Enrolled Successfully!"}
+          </h2>
           <p style={{fontSize:14,color:"#6B7280",lineHeight:1.7,marginBottom:8}}>
-            You are now enrolled in<br/><strong style={{color:C.navy}}>{course.title}</strong>
+            {isRTL?"تم تسجيلك في":"You are now enrolled in"}<br/>
+            <strong style={{color:C.navy}}>{course.title}</strong>
           </p>
           {email && <p style={{fontSize:13,color:"#9CA3AF"}}>Invoice sent to {email}</p>}
-          <p style={{fontSize:12,color:"#9CA3AF",marginTop:16}}>Redirecting to your course…</p>
+          <p style={{fontSize:12,color:"#9CA3AF",marginTop:16}}>{isRTL?"جارٍ التوجيه...":"Redirecting to your course…"}</p>
         </div>
       </div>
     </div>
   );
 
-  // PROCESSING SCREEN
   if (step==="processing") return (
     <div style={S.modalOv}>
       <div style={{...S.modal,maxWidth:360,textAlign:"center"}}>
         <div style={{padding:"48px 32px"}}>
           <div style={{width:56,height:56,borderRadius:"50%",border:`3px solid ${C.gold}`,borderTopColor:"transparent",margin:"0 auto 20px",animation:"spin 0.8s linear infinite"}}/>
-          <p style={{fontSize:15,fontWeight:600,color:C.navy}}>Processing payment…</p>
+          <p style={{fontSize:15,fontWeight:600,color:C.navy}}>{isRTL?"جارٍ المعالجة...":"Processing…"}</p>
           <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
         </div>
       </div>
     </div>
   );
 
-  // MAIN PAYMENT SCREEN
   return (
     <div style={S.modalOv} onClick={onClose}>
       <div style={S.modal} onClick={e=>e.stopPropagation()}>
-
-        {/* HEADER */}
         <div style={S.modalHead}>
           <h2 style={{fontSize:18,fontWeight:700,color:C.navy}}>{pt.title}</h2>
           <button onClick={onClose} style={{color:"#9CA3AF",display:"flex"}}><I.X/></button>
@@ -897,34 +1059,68 @@ function PaymentModal({ course, onClose, onPay, t }) {
           </div>
         </div>
 
+        {/* DISCOUNT CODE */}
+        <div style={{padding:"16px 24px",borderBottom:"1px solid #F0ECE5"}}>
+          <label style={{...S.label,marginBottom:6}}>{isRTL?"كود الخصم (اختياري)":"Discount Code (optional)"}</label>
+          {discount ? (
+            <div style={{padding:"10px 14px",background:C.successBg,borderRadius:9,border:`1px solid ${C.success}30`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:13,fontWeight:800,fontFamily:"monospace",color:C.success,letterSpacing:1}}>{discount.code}</span>
+                <span style={{fontSize:13,color:C.success,fontWeight:600}}>
+                  — {discount.type==="percent" ? `${discount.value}% off` : `${discount.value} SAR off`}
+                </span>
+              </div>
+              <button onClick={removeDiscount} style={{fontSize:12,color:C.danger,fontWeight:600}}>Remove</button>
+            </div>
+          ) : (
+            <div style={{display:"flex",gap:8}}>
+              <input placeholder={isRTL?"أدخل الكود":"Enter code"} value={coupon}
+                onChange={e=>setCoupon(e.target.value.toUpperCase())}
+                onKeyDown={e=>e.key==="Enter"&&(e.preventDefault(),applyDiscount())}
+                style={{...S.input,flex:1,fontFamily:"monospace",letterSpacing:1,fontWeight:600}}/>
+              <button type="button" onClick={applyDiscount}
+                style={{padding:"0 18px",background:C.navy,color:"#fff",borderRadius:10,fontWeight:600,fontSize:13,flexShrink:0}}>
+                {isRTL?"تطبيق":"Apply"}
+              </button>
+            </div>
+          )}
+          {couponErr && <p style={{fontSize:12,color:C.danger,marginTop:6,fontWeight:600}}>{couponErr}</p>}
+        </div>
+
         {/* PRICE BREAKDOWN */}
-        <div style={{padding:"20px 24px",borderBottom:"1px solid #F0ECE5"}}>
-          <h3 style={{fontSize:13,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>{pt.summary}</h3>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+        <div style={{padding:"16px 24px",borderBottom:"1px solid #F0ECE5"}}>
+          <h3 style={{fontSize:12,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>{pt.summary}</h3>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
             <span style={{color:"#6B7280",fontSize:14}}>{pt.subtotal}</span>
-            <Price value={course.price} size={14} bold={600}/>
+            <Price value={subtotal} size={14} bold={600}/>
           </div>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
+          {discount && (
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+              <span style={{color:C.success,fontSize:14,fontWeight:600}}>
+                {isRTL?"خصم":"Discount"} ({discount.code})
+              </span>
+              <span style={{fontSize:14,fontWeight:700,color:C.success}}>− <Price value={discAmt} size={14} bold={700} color={C.success}/></span>
+            </div>
+          )}
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
             <span style={{color:"#6B7280",fontSize:14}}>{pt.vat}</span>
             <Price value={vat} size={14} bold={600}/>
           </div>
-          <div style={{borderTop:"1px solid #E8E4DD",paddingTop:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{borderTop:"1px solid #E8E4DD",paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <span style={{fontSize:15,fontWeight:700,color:C.navy}}>{pt.total}</span>
             <Price value={total} size={22} bold={800} color={C.gold}/>
           </div>
         </div>
 
         <div style={{padding:"20px 24px"}}>
-          {/* EMAIL */}
           <label style={S.label}>{pt.emailLabel}</label>
-          <input type="email" placeholder="your@email.com" value={email} onChange={e=>setEmail(e.target.value)} style={{...S.input,marginBottom:20}}/>
-
-          {/* SINGLE PAYMENT BUTTON */}
-          <button onClick={handleAmazonPay} style={{width:"100%",padding:"16px",borderRadius:12,background:C.gold,color:"#fff",fontWeight:700,fontSize:16,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:10,border:"none",cursor:"pointer"}}>
+          <input type="email" placeholder="your@email.com" value={email} onChange={e=>setEmail(e.target.value)} style={{...S.input,marginBottom:16}}/>
+          <button onClick={()=>handlePay("amazon")}
+            style={{width:"100%",padding:"15px",borderRadius:12,background:C.gold,color:"#fff",fontWeight:700,fontSize:16,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:10,border:"none",cursor:"pointer"}}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
             {pt.payBtn}
           </button>
-          <p style={{fontSize:11,color:"#9CA3AF",textAlign:"center",marginTop:8}}>{pt.secured}</p>
+          <p style={{fontSize:11,color:"#9CA3AF",textAlign:"center"}}>{pt.secured}</p>
         </div>
       </div>
     </div>
@@ -1048,7 +1244,10 @@ function CourseCard({ course, onClick }) {
           {course.students>0 && <span style={{color:"#9CA3AF"}}>{course.students.toLocaleString()} students</span>}
         </div>
         <div style={{borderTop:"1px solid #F0ECE5",paddingTop:14,display:"flex",alignItems:"center",gap:8}}>
-          <Price value={course.price} size={18} bold={800} color={C.navy}/>
+          {(course.isFree||Number(course.price)===0)
+            ? <span style={{fontSize:14,fontWeight:800,color:C.success,background:C.successBg,padding:"4px 10px",borderRadius:20}}>FREE</span>
+            : <Price value={course.price} size={18} bold={800} color={C.navy}/>
+          }
           {course.originalPrice && <span style={{fontSize:13,color:"#9CA3AF",textDecoration:"line-through"}}><Price value={course.originalPrice} size={13} bold={400} color="#9CA3AF"/></span>}
         </div>
       </div>
@@ -1819,8 +2018,117 @@ function DashboardPage({ courses, user, nav, t, isRTL }) {
 // LOGIN
 // ═══════════════════════════════════════════
 // ═══════════════════════════════════════════
-// SOCIAL LOGIN BUTTON (branded)
+// RESET PASSWORD MODAL
 // ═══════════════════════════════════════════
+function ResetPasswordModal({ userId, token, isRTL, onDone }) {
+  const [pw,  setPw]  = useState("");
+  const [pw2, setPw2] = useState("");
+  const [err, setErr] = useState("");
+  const [done, setDone] = useState(false);
+
+  const rules = [
+    { test: pw.length>=8,         en:"At least 8 characters",     ar:"8 أحرف على الأقل" },
+    { test: /[A-Z]/.test(pw),     en:"One uppercase letter (A-Z)", ar:"حرف كبير واحد" },
+    { test: /[a-z]/.test(pw),     en:"One lowercase letter (a-z)", ar:"حرف صغير واحد" },
+    { test: /[0-9]/.test(pw),     en:"One number (0-9)",           ar:"رقم واحد" },
+  ];
+  const passed = rules.filter(r=>r.test).length;
+  const strengthColor = passed<=1?"#EF4444":passed===2?"#F59E0B":passed===3?"#3B82F6":C.success;
+
+  const submit = (e) => {
+    e.preventDefault(); setErr("");
+    if (passed < 4) { setErr(isRTL?"كلمة المرور لا تستوفي المتطلبات":"Password does not meet requirements"); return; }
+    if (pw !== pw2) { setErr(isRTL?"كلمتا المرور غير متطابقتين":"Passwords do not match"); return; }
+
+    const allUsers = ls("orb_users",[]);
+    const updated  = allUsers.map(u => u.id===userId
+      ? {...u, password:pw, resetToken:"", resetExpiry:0}
+      : u
+    );
+    ss("orb_users", updated);
+    setDone(true);
+    setTimeout(onDone, 2500);
+  };
+
+  return (
+    <div style={S.modalOv}>
+      <div style={{...S.modal,maxWidth:420}} onClick={e=>e.stopPropagation()}>
+        <div style={S.modalHead}>
+          <div>
+            <h2 style={{fontSize:18,fontWeight:700,color:C.navy}}>
+              {isRTL?"إنشاء كلمة مرور جديدة":"Create New Password"}
+            </h2>
+            <p style={{fontSize:13,color:"#9CA3AF",marginTop:2}}>
+              {isRTL?"اختر كلمة مرور قوية لحسابك":"Choose a strong password for your account"}
+            </p>
+          </div>
+        </div>
+        <div style={{padding:28,direction:isRTL?"rtl":"ltr",fontFamily:isRTL?"'Cairo',sans-serif":"inherit"}}>
+          {done ? (
+            <div style={{textAlign:"center",padding:"16px 0"}}>
+              <div style={{fontSize:48,marginBottom:16}}>✅</div>
+              <h3 style={{fontSize:18,fontWeight:700,color:C.navy,marginBottom:8}}>
+                {isRTL?"تم تغيير كلمة المرور!":"Password Changed!"}
+              </h3>
+              <p style={{fontSize:14,color:"#6B7280"}}>
+                {isRTL?"سيتم توجيهك لتسجيل الدخول...":"Redirecting you to sign in..."}
+              </p>
+            </div>
+          ) : (
+            <form onSubmit={submit}>
+              {err && <div style={{...S.errBox,marginBottom:16}}>{err}</div>}
+
+              <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left",marginBottom:6}}>
+                {isRTL?"كلمة المرور الجديدة *":"New Password *"}
+              </label>
+              <input required type="password" value={pw} onChange={e=>setPw(e.target.value)}
+                placeholder={isRTL?"أدخل كلمة المرور الجديدة":"Enter new password"}
+                style={{...S.input,marginBottom:10,borderColor:pw?(passed===4?C.success:passed>=2?"#F59E0B":"#EF4444"):"#E8E4DD"}}/>
+
+              {/* Strength bar */}
+              {pw && <div style={{marginBottom:14}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                  <div style={{flex:1,display:"flex",gap:3}}>
+                    {[1,2,3,4].map(i=>(
+                      <div key={i} style={{flex:1,height:4,borderRadius:4,background:i<=passed?strengthColor:"#E8E4DD",transition:"background 0.2s"}}/>
+                    ))}
+                  </div>
+                  <span style={{fontSize:12,fontWeight:700,color:strengthColor,minWidth:45}}>
+                    {passed<=1?(isRTL?"ضعيفة":"Weak"):passed===2?(isRTL?"مقبولة":"Fair"):passed===3?(isRTL?"جيدة":"Good"):(isRTL?"قوية":"Strong")}
+                  </span>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 12px"}}>
+                  {rules.map((r,i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:5,flexDirection:isRTL?"row-reverse":"row"}}>
+                      <span style={{fontSize:12,color:r.test?C.success:"#D1D5DB"}}>{r.test?"✓":"○"}</span>
+                      <span style={{fontSize:11,color:r.test?"#374151":"#9CA3AF"}}>{isRTL?r.ar:r.en}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>}
+
+              <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left",marginBottom:6}}>
+                {isRTL?"تأكيد كلمة المرور *":"Confirm Password *"}
+              </label>
+              <div style={{position:"relative",marginBottom:20}}>
+                <input required type="password" value={pw2} onChange={e=>setPw2(e.target.value)}
+                  placeholder={isRTL?"أعد كتابة كلمة المرور":"Re-enter password"}
+                  style={{...S.input,width:"100%",borderColor:pw2?(pw===pw2?C.success:"#EF4444"):"#E8E4DD"}}/>
+                {pw2 && <span style={{position:"absolute",[isRTL?"left":"right"]:14,top:"50%",transform:"translateY(-50%)",fontSize:16}}>
+                  {pw===pw2?"✅":"❌"}
+                </span>}
+              </div>
+
+              <button type="submit" style={{...S.btnPrimary,width:"100%",justifyContent:"center",padding:"14px 0",fontSize:15}}>
+                {isRTL?"تغيير كلمة المرور":"Change Password"}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 const SocialIcons = {
   google: (
     <svg width="18" height="18" viewBox="0 0 24 24">
@@ -1858,26 +2166,47 @@ function SocialLoginBtn({ provider, label, onClick }) {
 // LOGIN PAGE
 // ═══════════════════════════════════════════
 function LoginPage({ nav, login, t, isRTL, onSocial }) {
-  const [f,setF]   = useState({email:"",password:""});
-  const [err,setErr] = useState("");
-  const [showForgot, setShowForgot] = useState(false);
+  const [f,setF]           = useState({email:"",password:""});
+  const [err,setErr]        = useState("");
+  const [showForgot,  setShowForgot]  = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotSent,  setForgotSent]  = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [resetUrl, setResetUrl] = useState(""); // shown on screen as fallback
 
-  const [tempPwShown, setTempPwShown] = useState("");
-
-  const handleForgot = (e) => {
+  const handleForgot = async (e) => {
     e.preventDefault();
-    const users = ls("orb_users",[]);
-    const found  = users.find(u=>u.email===forgotEmail.toLowerCase().trim());
-    const chars  = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#";
-    const tempPw = Array.from({length:10},()=>chars[Math.floor(Math.random()*chars.length)]).join("");
+    setForgotLoading(true);
+    const allUsers = ls("orb_users",[]);
+    const found    = allUsers.find(u=>u.email===forgotEmail.toLowerCase().trim());
+
+    // Generate reset token (even if not found — same message for security)
+    const token   = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const resetLink = `${window.location.origin}/?reset=${token}`;
+
     if (found) {
-      const updated = users.map(u=>u.email===found.email?{...u,password:tempPw}:u);
-      ss("orb_users",updated);
-      setTempPwShown(tempPw); // Show temp password so user can log in
+      // Save reset token with 1-hour expiry
+      const updated = allUsers.map(u=>u.email===found.email
+        ? {...u, resetToken:token, resetExpiry: Date.now() + 3600000 }
+        : u
+      );
+      ss("orb_users", updated);
+
+      // Send reset email
+      await sendEmail("reset_password", {
+        to_name:    found.firstName || found.name?.split(" ")[0] || "User",
+        to_email:   found.email,
+        reset_url:  resetLink,
+        platform:   ls("orb_siteName","Orbit Learning"),
+        subject:    `Reset your ${ls("orb_siteName","Orbit Learning")} password`,
+        message:    `Hi ${found.firstName||found.name?.split(" ")[0]},\n\nClick the link below to reset your password. This link expires in 1 hour.\n\n${resetLink}\n\nIf you didn't request this, ignore this email.\n\n— The ${ls("orb_siteName","Orbit Learning")} Team`,
+      });
+
+      setResetUrl(resetLink); // fallback shown on screen
     }
-    setForgotSent(true); // Always show same success screen
+
+    setForgotLoading(false);
+    setForgotSent(true); // always show same screen
   };
 
   const go = e => {
@@ -1926,22 +2255,42 @@ function LoginPage({ nav, login, t, isRTL, onSocial }) {
         <div style={S.modalOv} onClick={()=>setShowForgot(false)}>
           <div style={{...S.modal,maxWidth:420}} onClick={e=>e.stopPropagation()}>
             <div style={S.modalHead}>
-              <h2 style={{fontSize:18,fontWeight:700,color:C.navy}}>{isRTL?"إعادة تعيين كلمة المرور":"Reset Password"}</h2>
+              <h2 style={{fontSize:18,fontWeight:700,color:C.navy,direction:isRTL?"rtl":"ltr"}}>
+                {isRTL?"إعادة تعيين كلمة المرور":"Reset Password"}
+              </h2>
               <button onClick={()=>setShowForgot(false)} style={{color:"#9CA3AF"}}><I.X/></button>
             </div>
-            <div style={{padding:28}}>
+            <div style={{padding:28,direction:isRTL?"rtl":"ltr",fontFamily:isRTL?"'Cairo',sans-serif":"inherit"}}>
               {forgotSent ? (
-                <div style={{textAlign:"center",padding:"16px 0"}}>
+                <div style={{textAlign:"center"}}>
                   <div style={{fontSize:48,marginBottom:16}}>📧</div>
-                  <h3 style={{fontSize:18,fontWeight:700,color:C.navy,marginBottom:12}}>
-                    {isRTL?"تم إرسال كلمة المرور":"Password Sent"}
+                  <h3 style={{fontSize:18,fontWeight:700,color:C.navy,marginBottom:10}}>
+                    {isRTL?"تحقق من بريدك الإلكتروني":"Check Your Email"}
                   </h3>
-                  <p style={{fontSize:15,color:"#6B7280",lineHeight:1.9,marginBottom:24}}>
+                  <p style={{fontSize:14,color:"#6B7280",lineHeight:1.9,marginBottom:20}}>
                     {isRTL
-                      ? "سيتم إرسال كلمة المرور الجديدة إلى بريدك الإلكتروني."
-                      : "You will receive your new password in your email."}
+                      ? "إذا كان هذا البريد مسجّلاً لدينا، سيصلك رابط لإعادة تعيين كلمة المرور. الرابط صالح لمدة ساعة واحدة."
+                      : "If this email is registered with us, you'll receive a password reset link. The link is valid for 1 hour."}
                   </p>
-                  <button onClick={()=>setShowForgot(false)} style={{...S.btnPrimary,margin:"0 auto",padding:"12px 32px",fontSize:15}}>
+
+                  {/* On-screen fallback link */}
+                  {resetUrl && (
+                    <div style={{background:C.bg,border:`1.5px solid ${C.gold}40`,borderRadius:12,padding:"16px 20px",marginBottom:20}}>
+                      <p style={{fontSize:12,color:"#9CA3AF",marginBottom:10}}>
+                        {isRTL?"أو استخدم الرابط أدناه مباشرةً:":"Or use this link directly:"}
+                      </p>
+                      <a href={resetUrl}
+                        style={{display:"block",padding:"11px 20px",background:C.gold,color:"#fff",borderRadius:9,fontSize:14,fontWeight:700,textDecoration:"none"}}>
+                        🔑 {isRTL?"إعادة تعيين كلمة المرور":"Reset My Password"}
+                      </a>
+                    </div>
+                  )}
+
+                  <p style={{fontSize:12,color:"#9CA3AF",marginBottom:20}}>
+                    {isRTL?"لم تستلم الرسالة؟ تحقق من مجلد البريد المزعج.":"Didn't get it? Check your spam folder."}
+                  </p>
+                  <button onClick={()=>{ setShowForgot(false); setForgotSent(false); setResetUrl(""); }}
+                    style={{...S.btnPrimary,margin:"0 auto",padding:"12px 32px",fontSize:15}}>
                     {isRTL?"العودة لتسجيل الدخول":"Back to Sign In"}
                   </button>
                 </div>
@@ -1949,20 +2298,19 @@ function LoginPage({ nav, login, t, isRTL, onSocial }) {
                 <form onSubmit={handleForgot}>
                   <p style={{fontSize:14,color:"#6B7280",marginBottom:20,lineHeight:1.7,textAlign:isRTL?"right":"left"}}>
                     {isRTL
-                      ? "أدخل بريدك الإلكتروني وسنرسل لك كلمة مرور مؤقتة."
-                      : "Enter your email address and we'll send you a temporary password."}
+                      ? "أدخل بريدك الإلكتروني وسنرسل لك رابطاً لإعادة تعيين كلمة المرور."
+                      : "Enter your email and we'll send you a reset link."}
                   </p>
                   <label style={{...S.label,display:"block",textAlign:isRTL?"right":"left"}}>{t.login.email}</label>
-                  <input
-                    required type="email"
-                    value={forgotEmail}
-                    onChange={e=>setForgotEmail(e.target.value)}
+                  <input required type="email" value={forgotEmail} onChange={e=>setForgotEmail(e.target.value)}
                     placeholder="you@example.com"
                     style={{...S.input,marginBottom:20,textAlign:isRTL?"right":"left"}}
-                    autoFocus
-                  />
-                  <button type="submit" style={{...S.btnPrimary,width:"100%",justifyContent:"center",padding:"13px 0"}}>
-                    {isRTL?"إرسال كلمة المرور المؤقتة":"Send Temporary Password"}
+                    autoFocus/>
+                  <button type="submit" disabled={forgotLoading}
+                    style={{...S.btnPrimary,width:"100%",justifyContent:"center",padding:"13px 0",opacity:forgotLoading?0.7:1}}>
+                    {forgotLoading
+                      ? (isRTL?"جارٍ الإرسال...":"Sending...")
+                      : (isRTL?"إرسال رابط الإعادة":"Send Reset Link")}
                   </button>
                 </form>
               )}
@@ -2561,7 +2909,8 @@ function AdminLayout({ user, logout, sec, setSec, courses, orders, users, addCou
     {id:"courses",   icon:<I.Book/>,    l:"Courses"},
     {id:"users",     icon:<I.Users/>,   l:"Users"},
     {id:"careers",   icon:<I.Briefcase/>,l:"Careers"},
-    {id:"revenue",   icon:<I.Dollar/>,  l:"Revenue"},
+    {id:"discounts", icon:<I.Tag/>,       l:"Discounts"},
+    {id:"revenue",   icon:<I.Dollar/>,    l:"Revenue"},
     {id:"settings",  icon:<I.Settings/>,l:"Settings"},
   ];
   return (
@@ -2585,6 +2934,7 @@ function AdminLayout({ user, logout, sec, setSec, courses, orders, users, addCou
       {sec==="course-form" && <AdminCourseForm course={selCourse} addCourse={addCourse} updateCourse={updateCourse} setSec={setSec} setSelCourse={setSelCourse}/>}
       {sec==="users"       && <AdminUsers users={users} addUserAdmin={addUserAdmin} updateUser={updateUser} deleteUser={deleteUser}/>}
       {sec==="careers"     && <AdminCareers/>}
+      {sec==="discounts"   && <AdminDiscounts/>}
       {sec==="revenue"     && <AdminRevenue orders={orders}/>}
       {sec==="settings"    && <AdminSettings onSiteNameChange={onSiteNameChange}/>}
     </main>
@@ -2764,28 +3114,148 @@ function AdminOverview({ courses, orders, users, nav }) {
 // ADMIN COURSES
 // ═══════════════════════════════════════════
 function AdminCourses({ courses, updateCourse, deleteCourse, setSec, setSelCourse }) {
-  const [delId, setDelId] = useState(null);
+  const [delId,      setDelId]      = useState(null);
+  const [progCourse, setProgCourse] = useState(null); // course to view progress
+
+  // Get all users who enrolled in a specific course + their progress
+  const getCourseProgress = (courseId) => {
+    const allUsers = ls("orb_users",[]);
+    return allUsers
+      .filter(u=>u.enrolledCourses?.includes(courseId))
+      .map(u=>{
+        let prog = {};
+        try { prog = JSON.parse(localStorage.getItem(`orb_prog_${u.id}_${courseId}`))||{}; } catch {}
+        const total  = courses.find(c=>c.id===courseId)?.modules?.length || 0;
+        const done   = Object.values(prog).filter(Boolean).length;
+        const pct    = total>0 ? Math.round((done/total)*100) : 0;
+        return { id:u.id, name:u.name, email:u.email, done, total, pct, hasCert:!!(u.certificates?.find(c=>c.courseId===courseId)) };
+      });
+  };
+
+  // Remove a student from a course
+  const unenrollUser = (userId, courseId) => {
+    const allUsers = ls("orb_users",[]);
+    const updated  = allUsers.map(u=> u.id===userId
+      ? {...u, enrolledCourses:(u.enrolledCourses||[]).filter(id=>id!==courseId)}
+      : u
+    );
+    ss("orb_users",updated);
+    // Refresh progress view
+    setProgCourse(c=>({...c, _refresh:Date.now()}));
+  };
+
   return <div style={{padding:40}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:32,flexWrap:"wrap",gap:16}}>
-      <div><h1 style={S.pageTitle}>Manage Courses</h1><p style={{...S.pageSub,marginTop:6}}>{courses.length} total</p></div>
+      <div><h1 style={S.pageTitle}>Manage Courses</h1><p style={{...S.pageSub,marginTop:6}}>{courses.length} total · {courses.filter(c=>c.published).length} published</p></div>
       <button onClick={()=>{setSelCourse(null);setSec("course-form");}} style={S.btnPrimary}>+ Add Course</button>
     </div>
+
     {courses.length>0
-      ?<div style={{display:"grid",gap:12}}>
-        {courses.map(c=>(
-          <div key={c.id} style={{background:"#fff",padding:20,borderRadius:12,border:"1px solid rgba(45,51,71,0.07)",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-            <div style={{width:64,height:64,borderRadius:12,overflow:"hidden",flexShrink:0}}><CourseThumbnail color={c.color} patternType={c.patternType} iconUrl={c.iconUrl}/></div>
-            <div style={{flex:1,minWidth:180}}><h3 style={{fontSize:16,fontWeight:700,color:C.navy,marginBottom:2}}>{c.title}</h3><p style={{fontSize:14,color:"#9CA3AF"}}>{c.instructor} · {c.category} · {fmtStr(c.price)}</p></div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              <button onClick={()=>updateCourse(c.id,{published:!c.published})} style={{padding:"8px 16px",background:c.published?"#E8E4DD":C.teal,color:c.published?"#6B7280":"#fff",borderRadius:8,fontSize:13,fontWeight:600}}>{c.published?"Unpublish":"Publish"}</button>
-              <button onClick={()=>{setSelCourse(c);setSec("course-form");}} style={{padding:"8px 16px",background:C.gold,color:"#fff",borderRadius:8,fontSize:13,fontWeight:600}}>Edit</button>
-              <button onClick={()=>setDelId(c.id)} style={{padding:"8px 16px",background:C.danger,color:"#fff",borderRadius:8,fontSize:13,fontWeight:600}}>Delete</button>
+      ? <div style={{display:"grid",gap:12}}>
+          {courses.map(c=>(
+            <div key={c.id} style={{background:"#fff",padding:20,borderRadius:12,border:"1px solid rgba(45,51,71,0.07)",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+              <div style={{width:64,height:64,borderRadius:12,overflow:"hidden",flexShrink:0}}><CourseThumbnail color={c.color} patternType={c.patternType} iconUrl={c.iconUrl}/></div>
+              <div style={{flex:1,minWidth:180}}>
+                <h3 style={{fontSize:16,fontWeight:700,color:C.navy,marginBottom:2}}>{c.title}</h3>
+                <p style={{fontSize:13,color:"#9CA3AF"}}>{c.instructor} · {c.category} · {c.isFree?"Free":fmtStr(c.price)}</p>
+                <div style={{display:"flex",gap:8,marginTop:4,flexWrap:"wrap"}}>
+                  <span style={{fontSize:11,padding:"2px 8px",background:c.published?C.successBg:"#F3F4F6",color:c.published?C.success:"#6B7280",borderRadius:20,fontWeight:600}}>{c.published?"✓ Published":"Draft"}</span>
+                  <span style={{fontSize:11,padding:"2px 8px",background:"#F3F4F6",color:"#6B7280",borderRadius:20}}>{c.students||0} students</span>
+                  {c.isFree && <span style={{fontSize:11,padding:"2px 8px",background:C.successBg,color:C.success,borderRadius:20,fontWeight:600}}>FREE</span>}
+                </div>
+              </div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                <button onClick={()=>setProgCourse(c)} style={{padding:"8px 14px",background:`${C.teal}15`,color:C.teal,borderRadius:8,fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  Students
+                </button>
+                <button onClick={()=>updateCourse(c.id,{published:!c.published})} style={{padding:"8px 14px",background:c.published?"#E8E4DD":C.teal,color:c.published?"#6B7280":"#fff",borderRadius:8,fontSize:13,fontWeight:600}}>
+                  {c.published?"Unpublish":"Publish"}
+                </button>
+                <button onClick={()=>{setSelCourse(c);setSec("course-form");}} style={{padding:"8px 14px",background:C.gold,color:"#fff",borderRadius:8,fontSize:13,fontWeight:600}}>Edit</button>
+                <button onClick={()=>setDelId(c.id)} style={{padding:"8px 14px",background:C.danger,color:"#fff",borderRadius:8,fontSize:13,fontWeight:600}}>Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      : <div style={S.empty}><I.Book/><h2 style={{...S.secTitle,marginTop:16}}>No Courses</h2><p style={{color:"#9CA3AF",marginTop:8,marginBottom:24}}>Add your first course</p><button onClick={()=>{setSelCourse(null);setSec("course-form");}} style={S.btnPrimary}>+ Add Course</button></div>}
+
+    {/* DELETE CONFIRM */}
+    {delId && <div style={S.modalOv} onClick={()=>setDelId(null)}><div style={{...S.modal,maxWidth:400,textAlign:"center"}} onClick={e=>e.stopPropagation()}>
+      <h3 style={{fontSize:20,fontWeight:700,padding:"28px 28px 12px"}}>Delete Course?</h3>
+      <p style={{color:"#6B7280",padding:"0 28px 24px"}}>This cannot be undone. All enrolled students will lose access.</p>
+      <div style={{display:"flex",gap:12,padding:"0 28px 28px"}}>
+        <button onClick={()=>setDelId(null)} style={{flex:1,padding:12,background:"#E8E4DD",borderRadius:10,fontWeight:600}}>Cancel</button>
+        <button onClick={()=>{deleteCourse(delId);setDelId(null);}} style={{flex:1,padding:12,background:C.danger,color:"#fff",borderRadius:10,fontWeight:600}}>Delete</button>
+      </div>
+    </div></div>}
+
+    {/* STUDENT PROGRESS MODAL */}
+    {progCourse && (()=>{
+      const students = getCourseProgress(progCourse.id);
+      return (
+        <div style={S.modalOv} onClick={()=>setProgCourse(null)}>
+          <div style={{...S.modal,maxWidth:640,maxHeight:"85vh",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
+            <div style={S.modalHead}>
+              <div>
+                <h2 style={{fontSize:18,fontWeight:700,color:C.navy}}>Student Progress</h2>
+                <p style={{fontSize:13,color:"#9CA3AF",marginTop:2}}>{progCourse.title} · {students.length} enrolled</p>
+              </div>
+              <button onClick={()=>setProgCourse(null)} style={{color:"#9CA3AF"}}><I.X/></button>
+            </div>
+            <div style={{overflowY:"auto",flex:1,padding:"0 0 20px"}}>
+              {students.length>0 ? (
+                <table style={{width:"100%",fontSize:14,borderCollapse:"collapse"}}>
+                  <thead>
+                    <tr style={{background:"#F5F2ED",position:"sticky",top:0}}>
+                      {["Student","Progress","Lessons","Certificate","Action"].map(h=>(
+                        <th key={h} style={{padding:"10px 20px",textAlign:"left",fontWeight:600,color:"#6B7280",fontSize:12,whiteSpace:"nowrap"}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {students.map(s=>(
+                      <tr key={s.id} style={{borderBottom:"1px solid #F0ECE5"}}>
+                        <td style={{padding:"14px 20px"}}>
+                          <p style={{fontWeight:600,color:C.navy}}>{s.name}</p>
+                          <p style={{fontSize:12,color:"#9CA3AF"}}>{s.email}</p>
+                        </td>
+                        <td style={{padding:"14px 20px",minWidth:120}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <div style={{flex:1,height:6,background:"#E8E4DD",borderRadius:10,overflow:"hidden"}}>
+                              <div style={{height:"100%",width:`${s.pct}%`,background:s.pct===100?C.success:C.gold,borderRadius:10,transition:"width 0.4s"}}/>
+                            </div>
+                            <span style={{fontSize:12,fontWeight:700,color:s.pct===100?C.success:C.navy,minWidth:32}}>{s.pct}%</span>
+                          </div>
+                        </td>
+                        <td style={{padding:"14px 20px",color:"#6B7280",fontSize:13,whiteSpace:"nowrap"}}>
+                          {s.done} / {s.total}
+                        </td>
+                        <td style={{padding:"14px 20px"}}>
+                          {s.hasCert
+                            ? <span style={{fontSize:11,padding:"3px 9px",background:C.successBg,color:C.success,borderRadius:20,fontWeight:600}}>🎓 Earned</span>
+                            : <span style={{fontSize:11,padding:"3px 9px",background:"#F3F4F6",color:"#9CA3AF",borderRadius:20}}>—</span>}
+                        </td>
+                        <td style={{padding:"14px 20px"}}>
+                          <button onClick={()=>{ if(window.confirm(`Remove ${s.name} from this course?`)) unenrollUser(s.id,progCourse.id); }}
+                            style={{padding:"5px 12px",background:C.dangerBg,color:C.danger,borderRadius:6,fontSize:12,fontWeight:600,whiteSpace:"nowrap"}}>
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{padding:"48px 32px",textAlign:"center"}}>
+                  <p style={{color:"#9CA3AF",fontSize:15}}>No students enrolled yet.</p>
+                </div>
+              )}
             </div>
           </div>
-        ))}
-      </div>
-      :<div style={S.empty}><I.Book/><h2 style={{...S.secTitle,marginTop:16}}>No Courses</h2><p style={{color:"#9CA3AF",marginTop:8,marginBottom:24}}>Add your first course</p><button onClick={()=>{setSelCourse(null);setSec("course-form");}} style={S.btnPrimary}>+ Add Course</button></div>}
-    {delId && <div style={S.modalOv} onClick={()=>setDelId(null)}><div style={{...S.modal,maxWidth:400,textAlign:"center"}} onClick={e=>e.stopPropagation()}><h3 style={{fontSize:20,fontWeight:700,padding:"28px 28px 12px"}}>Delete Course?</h3><p style={{color:"#6B7280",padding:"0 28px 24px"}}>This cannot be undone.</p><div style={{display:"flex",gap:12,padding:"0 28px 28px"}}><button onClick={()=>setDelId(null)} style={{flex:1,padding:12,background:"#E8E4DD",borderRadius:10,fontWeight:600}}>Cancel</button><button onClick={()=>{deleteCourse(delId);setDelId(null);}} style={{flex:1,padding:12,background:C.danger,color:"#fff",borderRadius:10,fontWeight:600}}>Delete</button></div></div></div>}
+        </div>
+      );
+    })()}
   </div>;
 }
 
@@ -3083,16 +3553,56 @@ function AdminCourseForm({ course, addCourse, updateCourse, setSec, setSelCourse
       </div>}
 
       {/* PRICING TAB */}
-      {tab==="pricing" && <div style={{background:"#fff",padding:32,borderRadius:16,border:"1px solid rgba(45,51,71,0.07)"}}>
-        <h3 style={{fontSize:16,fontWeight:700,color:C.navy,marginBottom:24}}>Pricing (ر.س)</h3>
-        <div className="form-grid-2" style={{marginBottom:24}}>
-          <div><label style={S.label}>Price (ر.س) *</label><input required type="number" min={0} value={f.price} onChange={e=>setF({...f,price:e.target.value})} style={S.input}/></div>
-          <div><label style={S.label}>Original Price (for strikethrough)</label><input type="number" min={0} value={f.originalPrice||""} onChange={e=>setF({...f,originalPrice:e.target.value})} style={S.input}/></div>
+      {tab==="pricing" && <div>
+        {/* FREE COURSE TOGGLE */}
+        <div style={{background:"#fff",padding:32,borderRadius:16,border:"1px solid rgba(45,51,71,0.07)",marginBottom:16}}>
+          <h3 style={{fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Course Access</h3>
+          <p style={{fontSize:13,color:"#9CA3AF",marginBottom:20}}>Set this course as free or paid.</p>
+          <label style={{display:"flex",alignItems:"center",gap:14,padding:20,background:f.isFree?`${C.success}08`:C.bg,borderRadius:12,border:`2px solid ${f.isFree?C.success:"#E8E4DD"}`,cursor:"pointer",transition:"all 0.2s"}}>
+            <div style={{position:"relative",width:48,height:26,borderRadius:13,background:f.isFree?C.success:"#D1D5DB",transition:"background 0.2s",flexShrink:0}}>
+              <div style={{position:"absolute",top:3,left:f.isFree?26:3,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.2)"}}/>
+              <input type="checkbox" checked={f.isFree||false} onChange={e=>setF({...f,isFree:e.target.checked,price:e.target.checked?0:f.price})} style={{opacity:0,position:"absolute",inset:0,cursor:"pointer"}}/>
+            </div>
+            <div>
+              <p style={{fontSize:15,fontWeight:700,color:f.isFree?C.success:C.navy}}>{f.isFree?"✓ Free Course":"Paid Course"}</p>
+              <p style={{fontSize:13,color:"#9CA3AF",marginTop:2}}>{f.isFree?"Students can enroll without payment":"Set price below"}</p>
+            </div>
+          </label>
         </div>
-        <label style={{display:"flex",alignItems:"center",gap:8,fontSize:15,fontWeight:600,cursor:"pointer"}}>
-          <input type="checkbox" id="pub" checked={f.published} onChange={e=>setF({...f,published:e.target.checked})} style={{width:18,height:18}}/>
-          Published (visible to students)
-        </label>
+
+        {/* PRICE FIELDS — hidden when free */}
+        {!f.isFree && <div style={{background:"#fff",padding:32,borderRadius:16,border:"1px solid rgba(45,51,71,0.07)",marginBottom:16}}>
+          <h3 style={{fontSize:16,fontWeight:700,color:C.navy,marginBottom:20}}>Pricing (ر.س)</h3>
+          <div className="form-grid-2" style={{marginBottom:20}}>
+            <div>
+              <label style={S.label}>Price (ر.س) *</label>
+              <input required={!f.isFree} type="number" min={0} value={f.price} onChange={e=>setF({...f,price:e.target.value})} style={S.input}/>
+              <p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>The price students pay after any discount</p>
+            </div>
+            <div>
+              <label style={S.label}>Original Price — strikethrough</label>
+              <input type="number" min={0} placeholder="e.g. 399" value={f.originalPrice||""} onChange={e=>setF({...f,originalPrice:e.target.value})} style={S.input}/>
+              <p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>Shows crossed-out "was" price on card</p>
+            </div>
+          </div>
+          {/* Discount preview */}
+          {f.originalPrice && Number(f.originalPrice)>Number(f.price) && (
+            <div style={{padding:"10px 16px",background:`${C.success}10`,borderRadius:8,border:`1px solid ${C.success}30`,display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:13,color:C.success,fontWeight:600}}>
+                {Math.round(((Number(f.originalPrice)-Number(f.price))/Number(f.originalPrice))*100)}% discount shown on course card
+              </span>
+            </div>
+          )}
+        </div>}
+
+        {/* PUBLISHED */}
+        <div style={{background:"#fff",padding:24,borderRadius:16,border:"1px solid rgba(45,51,71,0.07)"}}>
+          <label style={{display:"flex",alignItems:"center",gap:12,fontSize:15,fontWeight:600,cursor:"pointer",color:C.navy}}>
+            <input type="checkbox" checked={f.published} onChange={e=>setF({...f,published:e.target.checked})} style={{width:18,height:18,accentColor:C.teal}}/>
+            Published — visible to students
+          </label>
+          <p style={{fontSize:12,color:"#9CA3AF",marginTop:6,marginLeft:30}}>Unpublished courses are only visible to admins.</p>
+        </div>
       </div>}
 
       {/* APPEARANCE TAB */}
@@ -3512,6 +4022,194 @@ function AdminCareers() {
   );
 }
 
+// ═══════════════════════════════════════════
+// ADMIN DISCOUNTS — create & manage coupon codes
+// ═══════════════════════════════════════════
+function AdminDiscounts() {
+  const [codes,    setCodes]   = useState(()=>ls("orb_discounts",[]));
+  const [showForm, setShowForm] = useState(false);
+  const [editCode, setEditCode] = useState(null);
+  const [form,     setForm]    = useState({code:"",type:"percent",value:"",maxUses:"",expiry:"",active:true,description:""});
+  const [err,      setErr]     = useState("");
+
+  const saveCodes = v => { setCodes(v); ss("orb_discounts",v); };
+
+  const openNew  = () => { setForm({code:"",type:"percent",value:"",maxUses:"",expiry:"",active:true,description:""}); setEditCode(null); setErr(""); setShowForm(true); };
+  const openEdit = c => { setForm({...c}); setEditCode(c); setErr(""); setShowForm(true); };
+
+  const genCode = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const code = Array.from({length:8},()=>chars[Math.floor(Math.random()*chars.length)]).join("");
+    setForm(p=>({...p,code}));
+  };
+
+  const handleSave = (e) => {
+    e.preventDefault(); setErr("");
+    if (!form.code.trim()) { setErr("Code is required"); return; }
+    if (!form.value || Number(form.value)<=0) { setErr("Discount value must be greater than 0"); return; }
+    if (form.type==="percent" && Number(form.value)>100) { setErr("Percentage cannot exceed 100%"); return; }
+    const code = form.code.trim().toUpperCase();
+    // Check duplicate
+    if (!editCode && codes.find(c=>c.code===code)) { setErr("This code already exists"); return; }
+    const entry = {...form, code, value:Number(form.value), maxUses:form.maxUses?Number(form.maxUses):null, uses:editCode?.uses||0, id:editCode?.id||`dc-${Date.now()}` };
+    if (editCode) saveCodes(codes.map(c=>c.id===editCode.id?entry:c));
+    else saveCodes([...codes,entry]);
+    setShowForm(false); setEditCode(null);
+  };
+
+  const toggleActive = id => saveCodes(codes.map(c=>c.id===id?{...c,active:!c.active}:c));
+  const deleteCode   = id => saveCodes(codes.filter(c=>c.id!==id));
+
+  const isExpired = c => c.expiry && new Date(c.expiry) < new Date();
+  const isMaxed   = c => c.maxUses && c.uses >= c.maxUses;
+
+  return (
+    <div style={{padding:40}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24,flexWrap:"wrap",gap:16}}>
+        <div>
+          <h1 style={S.pageTitle}>Discount Codes</h1>
+          <p style={{...S.pageSub,marginTop:6}}>{codes.length} codes · {codes.filter(c=>c.active&&!isExpired(c)&&!isMaxed(c)).length} active</p>
+        </div>
+        <button onClick={openNew} style={S.btnPrimary}><I.Tag/> New Code</button>
+      </div>
+
+      {codes.length>0 ? (
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {codes.map(c=>{
+            const expired = isExpired(c);
+            const maxed   = isMaxed(c);
+            const alive   = c.active && !expired && !maxed;
+            return (
+              <div key={c.id} style={{background:"#fff",borderRadius:14,padding:"20px 24px",border:`1px solid ${alive?"rgba(45,51,71,0.07)":"#F0ECE5"}`,display:"flex",alignItems:"center",gap:16,flexWrap:"wrap",opacity:alive?1:0.65}}>
+                {/* CODE BADGE */}
+                <div style={{padding:"8px 16px",background:alive?`${C.gold}12`:"#F5F5F5",borderRadius:9,border:`1.5px dashed ${alive?C.gold:"#D1D5DB"}`,flexShrink:0}}>
+                  <p style={{fontSize:16,fontWeight:800,color:alive?C.gold:"#9CA3AF",letterSpacing:2,fontFamily:"monospace"}}>{c.code}</p>
+                </div>
+                {/* INFO */}
+                <div style={{flex:1,minWidth:180}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
+                    <span style={{fontSize:16,fontWeight:700,color:C.navy}}>
+                      {c.type==="percent" ? `${c.value}% off` : `${c.value} SAR off`}
+                    </span>
+                    {c.description && <span style={{fontSize:13,color:"#9CA3AF"}}>— {c.description}</span>}
+                    {/* Status chips */}
+                    {!c.active && <span style={{fontSize:11,padding:"2px 8px",background:"#F3F4F6",color:"#6B7280",borderRadius:20,fontWeight:600}}>Disabled</span>}
+                    {expired    && <span style={{fontSize:11,padding:"2px 8px",background:C.dangerBg,color:C.danger,borderRadius:20,fontWeight:600}}>Expired</span>}
+                    {maxed      && <span style={{fontSize:11,padding:"2px 8px",background:"#FEF3C7",color:"#D97706",borderRadius:20,fontWeight:600}}>Max uses reached</span>}
+                    {alive      && <span style={{fontSize:11,padding:"2px 8px",background:C.successBg,color:C.success,borderRadius:20,fontWeight:600}}>✓ Active</span>}
+                  </div>
+                  <div style={{display:"flex",gap:12,fontSize:12,color:"#9CA3AF",flexWrap:"wrap"}}>
+                    <span>Used: {c.uses||0}{c.maxUses?` / ${c.maxUses}`:""} times</span>
+                    {c.expiry && <span>Expires: {new Date(c.expiry).toLocaleDateString()}</span>}
+                  </div>
+                </div>
+                {/* ACTIONS */}
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  <button onClick={()=>toggleActive(c.id)} style={{padding:"7px 14px",background:c.active?"#F3F4F6":C.successBg,color:c.active?"#6B7280":C.success,borderRadius:7,fontSize:12,fontWeight:600}}>
+                    {c.active?"Disable":"Enable"}
+                  </button>
+                  <button onClick={()=>openEdit(c)} style={{padding:"7px 14px",background:C.gold,color:"#fff",borderRadius:7,fontSize:12,fontWeight:600}}>Edit</button>
+                  <button onClick={()=>deleteCode(c.id)} style={{padding:"7px 14px",background:C.danger,color:"#fff",borderRadius:7,fontSize:12,fontWeight:600}}>Delete</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={S.empty}>
+          <I.Tag/>
+          <h2 style={{...S.secTitle,marginTop:12}}>No Discount Codes Yet</h2>
+          <p style={{color:"#9CA3AF",marginTop:8,marginBottom:24}}>Create your first discount code to offer students a special deal.</p>
+          <button onClick={openNew} style={S.btnPrimary}>Create First Code</button>
+        </div>
+      )}
+
+      {/* CREATE / EDIT MODAL */}
+      {showForm && <div style={S.modalOv} onClick={()=>setShowForm(false)}><div style={{...S.modal,maxWidth:500}} onClick={e=>e.stopPropagation()}>
+        <div style={S.modalHead}>
+          <h2 style={{fontSize:18,fontWeight:700,color:C.navy}}>{editCode?"Edit Discount Code":"New Discount Code"}</h2>
+          <button onClick={()=>setShowForm(false)} style={{color:"#9CA3AF"}}><I.X/></button>
+        </div>
+        <div style={{padding:28,overflowY:"auto",maxHeight:"80vh"}}>
+          {err && <div style={{...S.errBox,marginBottom:16}}>{err}</div>}
+          <form onSubmit={handleSave}>
+            {/* CODE */}
+            <label style={S.label}>Discount Code *</label>
+            <div style={{display:"flex",gap:8,marginBottom:6}}>
+              <input required value={form.code} onChange={e=>setForm({...form,code:e.target.value.toUpperCase()})}
+                placeholder="e.g. ORBIT20" style={{...S.input,flex:1,fontFamily:"monospace",fontSize:15,letterSpacing:2,fontWeight:700}}/>
+              <button type="button" onClick={genCode} style={{padding:"0 16px",background:C.bg,borderRadius:10,border:"1px solid #E8E4DD",fontSize:13,fontWeight:600,color:C.navy,whiteSpace:"nowrap",flexShrink:0}}>
+                ✨ Generate
+              </button>
+            </div>
+            <p style={{fontSize:11,color:"#9CA3AF",marginBottom:16}}>Students will enter this code at checkout. Not case-sensitive.</p>
+
+            {/* DESCRIPTION */}
+            <label style={S.label}>Description (optional)</label>
+            <input placeholder="e.g. Launch week offer" value={form.description} onChange={e=>setForm({...form,description:e.target.value})} style={{...S.input,marginBottom:16}}/>
+
+            {/* TYPE + VALUE */}
+            <div className="form-grid-2" style={{marginBottom:16}}>
+              <div>
+                <label style={S.label}>Discount Type *</label>
+                <select value={form.type} onChange={e=>setForm({...form,type:e.target.value})} style={S.input}>
+                  <option value="percent">Percentage (%) off</option>
+                  <option value="fixed">Fixed amount (SAR) off</option>
+                </select>
+              </div>
+              <div>
+                <label style={S.label}>Discount Value *</label>
+                <div style={{position:"relative"}}>
+                  <input required type="number" min={1} max={form.type==="percent"?100:99999} value={form.value}
+                    onChange={e=>setForm({...form,value:e.target.value})} style={{...S.input,paddingRight:40}}/>
+                  <span style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",fontSize:14,fontWeight:600,color:"#9CA3AF"}}>
+                    {form.type==="percent"?"%":"ر.س"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* MAX USES + EXPIRY */}
+            <div className="form-grid-2" style={{marginBottom:16}}>
+              <div>
+                <label style={S.label}>Max Uses (leave empty = unlimited)</label>
+                <input type="number" min={1} placeholder="Unlimited" value={form.maxUses||""} onChange={e=>setForm({...form,maxUses:e.target.value})} style={S.input}/>
+              </div>
+              <div>
+                <label style={S.label}>Expiry Date (optional)</label>
+                <input type="date" value={form.expiry||""} onChange={e=>setForm({...form,expiry:e.target.value})} style={S.input}/>
+              </div>
+            </div>
+
+            {/* ACTIVE */}
+            <label style={{display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:600,cursor:"pointer",marginBottom:24,color:C.navy}}>
+              <input type="checkbox" checked={form.active} onChange={e=>setForm({...form,active:e.target.checked})} style={{width:16,height:16,accentColor:C.teal}}/>
+              Code is active (students can use it)
+            </label>
+
+            {/* PREVIEW */}
+            {form.value && (
+              <div style={{padding:14,background:`${C.gold}08`,borderRadius:10,border:`1px solid ${C.gold}20`,marginBottom:20}}>
+                <p style={{fontSize:13,color:C.goldD,fontWeight:600}}>
+                  Preview: Code <span style={{fontFamily:"monospace",background:`${C.gold}15`,padding:"2px 6px",borderRadius:4}}>{form.code||"CODE"}</span> gives{" "}
+                  {form.type==="percent" ? `${form.value||"?"}% off` : `${form.value||"?"} SAR off`} the course price
+                  {form.maxUses ? `, max ${form.maxUses} uses` : ""}
+                  {form.expiry ? `, expires ${new Date(form.expiry).toLocaleDateString()}` : ""}
+                </p>
+              </div>
+            )}
+
+            <div style={{display:"flex",gap:12}}>
+              <button type="button" onClick={()=>setShowForm(false)} style={{flex:1,padding:13,background:"#E8E4DD",borderRadius:10,fontWeight:600}}>Cancel</button>
+              <button type="submit" style={{flex:1,...S.btnPrimary,padding:13,justifyContent:"center"}}>{editCode?"Save Changes":"Create Code"}</button>
+            </div>
+          </form>
+        </div>
+      </div></div>}
+    </div>
+  );
+}
+
 function AdminRevenue({ orders }) {
   const rev = orders.reduce((s,o)=>s+o.amount,0);
   return <div style={{padding:40}}>
@@ -3551,8 +4249,7 @@ function AdminSettings({ onSiteNameChange }) {
   const [notifPay,    setNP]      = useState(true);
   const [notifReport, setNR]      = useState(false);
 
-  // EmailJS config
-  const [ejs, setEjs] = useState(()=>ls("orb_emailjs",{serviceId:"",templateId:"",templateCareer:"",templateAdmin:"",publicKey:""}));
+  const [chatbotEnabled, setChatbotEnabled] = useState(()=>ls("orb_chatbot_enabled","1")==="1");
   const updateEjs = (k,v) => setEjs(p=>({...p,[k]:v}));
   const [adminNotifEmail, setAdminNotifEmail] = useState(()=>ls("orb_adminEmail",""));
   // OAuth credentials
@@ -3564,8 +4261,9 @@ function AdminSettings({ onSiteNameChange }) {
     ss("orb_vat", vat);
     ss("orb_amazonId", amazonId);
     ss("orb_oauth", oauth);
-    ss("orb_emailjs", ejs);
+    ss("orb_email_cfg", ejs);
     ss("orb_adminEmail", adminNotifEmail);
+    ss("orb_chatbot_enabled", chatbotEnabled?"1":"0");
     document.title = siteName;
     onSiteNameChange?.(siteName);   // ← triggers navbar re-render immediately
     setSaved(true);
@@ -3617,73 +4315,123 @@ function AdminSettings({ onSiteNameChange }) {
       </div>
     </div>
 
-    {/* EMAIL SERVICE (EmailJS) */}
+    {/* EMAIL SERVICE — Brevo */}
     <div style={{background:"#fff",padding:32,borderRadius:16,border:"1px solid rgba(45,51,71,0.07)",marginBottom:24}}>
-      <h2 style={{fontSize:16,fontWeight:700,color:C.navy,marginBottom:4}}>Email Service (EmailJS)</h2>
-      <p style={{fontSize:13,color:"#9CA3AF",marginBottom:20}}>Sends: activation emails to new students + career application notifications. Free at <strong>emailjs.com</strong></p>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>
+        <div style={{width:36,height:36,borderRadius:9,background:"#0B996E15",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#0B996E"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+        </div>
+        <h2 style={{fontSize:16,fontWeight:700,color:C.navy}}>Email Service — Brevo</h2>
+        {ejs.apiKey && ejs.senderEmail && <span style={{fontSize:11,padding:"3px 10px",background:C.successBg,color:C.success,borderRadius:20,fontWeight:700}}>✓ Configured</span>}
+      </div>
+      <p style={{fontSize:13,color:"#9CA3AF",marginBottom:20}}>
+        300 free emails/day. No templates needed — emails are built-in. Setup takes 2 minutes at <strong>brevo.com</strong>
+      </p>
 
       {/* STATUS */}
-      <div style={{padding:14,background:ejs.serviceId&&ejs.publicKey?C.successBg:C.dangerBg,borderRadius:10,marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
-        <span style={{fontSize:16}}>{ejs.serviceId&&ejs.publicKey?"✅":"⚠️"}</span>
-        <p style={{fontSize:13,fontWeight:600,color:ejs.serviceId&&ejs.publicKey?C.success:C.danger}}>
-          {ejs.serviceId&&ejs.publicKey
-            ? "EmailJS configured — emails will be sent automatically"
-            : "EmailJS not configured — emails won't be sent. Students can still activate via the on-screen link."}
-        </p>
+      <div style={{padding:14,background:ejs.apiKey&&ejs.senderEmail?C.successBg:"#FFF7ED",borderRadius:10,marginBottom:20,display:"flex",alignItems:"center",gap:10,border:`1px solid ${ejs.apiKey&&ejs.senderEmail?C.success:"#FED7AA"}`}}>
+        <span style={{fontSize:18}}>{ejs.apiKey&&ejs.senderEmail?"✅":"⚠️"}</span>
+        <div>
+          <p style={{fontSize:13,fontWeight:700,color:ejs.apiKey&&ejs.senderEmail?C.success:"#C2410C"}}>
+            {ejs.apiKey&&ejs.senderEmail ? "Ready — emails will be sent automatically" : "Not configured yet"}
+          </p>
+          <p style={{fontSize:12,color:"#9CA3AF",marginTop:2}}>
+            {ejs.apiKey&&ejs.senderEmail
+              ? `Sending from: ${ejs.senderEmail}`
+              : "Activation links and reset links will still appear on-screen as fallback."}
+          </p>
+        </div>
       </div>
 
-      <div style={{display:"grid",gap:12,marginBottom:20}}>
-        {/* Core credentials */}
-        <div style={{padding:16,background:C.bg,borderRadius:10,border:"1px solid #E8E4DD"}}>
-          <p style={{fontSize:12,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>Core Credentials</p>
-          <div style={{display:"grid",gap:10}}>
-            <div><label style={S.label}>Service ID *</label><input placeholder="service_xxxxxxx" value={ejs.serviceId} onChange={e=>updateEjs("serviceId",e.target.value)} style={S.input}/></div>
-            <div><label style={S.label}>Public Key *</label><input placeholder="your_public_key" value={ejs.publicKey} onChange={e=>updateEjs("publicKey",e.target.value)} style={S.input}/></div>
-          </div>
+      <div style={{display:"grid",gap:14}}>
+        <div>
+          <label style={S.label}>Brevo API Key *</label>
+          <input
+            type="password"
+            placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            value={ejs.apiKey}
+            onChange={e=>updateEjs("apiKey",e.target.value)}
+            style={S.input}
+          />
+          <p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>
+            Get from brevo.com → Top-right menu → SMTP & API → API Keys → Generate New Key
+          </p>
         </div>
-
-        {/* Email templates */}
-        <div style={{padding:16,background:C.bg,borderRadius:10,border:"1px solid #E8E4DD"}}>
-          <p style={{fontSize:12,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>Email Templates</p>
-          <div style={{display:"grid",gap:10}}>
-            <div>
-              <label style={S.label}>Account Activation Template ID *</label>
-              <input placeholder="template_activation" value={ejs.templateId} onChange={e=>updateEjs("templateId",e.target.value)} style={S.input}/>
-              <p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>Variables: <code>to_name</code>, <code>to_email</code>, <code>activate_url</code>, <code>platform</code></p>
-            </div>
-            <div>
-              <label style={S.label}>Career Applicant Confirmation Template ID</label>
-              <input placeholder="template_career_applicant (optional)" value={ejs.templateCareer||""} onChange={e=>updateEjs("templateCareer",e.target.value)} style={S.input}/>
-              <p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>Variables: <code>to_name</code>, <code>to_email</code>, <code>job_title</code>, <code>platform</code>, <code>message</code></p>
-            </div>
-            <div>
-              <label style={S.label}>Career Admin Notification Template ID</label>
-              <input placeholder="template_career_admin (optional)" value={ejs.templateAdmin||""} onChange={e=>updateEjs("templateAdmin",e.target.value)} style={S.input}/>
-              <p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>Variables: <code>to_name</code>, <code>to_email</code>, <code>applicant</code>, <code>job_title</code>, <code>app_email</code>, <code>app_phone</code>, <code>message</code></p>
-            </div>
-          </div>
+        <div>
+          <label style={S.label}>Sender Email Address *</label>
+          <input
+            type="email"
+            placeholder="noreply@orbit-lms.net"
+            value={ejs.senderEmail}
+            onChange={e=>updateEjs("senderEmail",e.target.value)}
+            style={S.input}
+          />
+          <p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>
+            Must be a verified sender in your Brevo account. You can use your own Gmail too.
+          </p>
+        </div>
+        <div>
+          <label style={S.label}>Sender Name</label>
+          <input
+            placeholder="Orbit Learning"
+            value={ejs.senderName||""}
+            onChange={e=>updateEjs("senderName",e.target.value)}
+            style={S.input}
+          />
         </div>
 
         {/* Admin notification email */}
-        <div style={{padding:16,background:C.bg,borderRadius:10,border:"1px solid #E8E4DD"}}>
-          <p style={{fontSize:12,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>Admin Notification Email</p>
-          <label style={S.label}>Receive career application alerts at:</label>
-          <input type="email" placeholder="linkybinky9@gmail.com" value={adminNotifEmail} onChange={e=>setAdminNotifEmail(e.target.value)} style={S.input}/>
-          <p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>When a student submits a job application, this email gets notified instantly.</p>
+        <div style={{paddingTop:14,borderTop:"1px solid #E8E4DD"}}>
+          <label style={S.label}>Admin Notification Email</label>
+          <input
+            type="email"
+            placeholder="your@email.com"
+            value={adminNotifEmail}
+            onChange={e=>setAdminNotifEmail(e.target.value)}
+            style={S.input}
+          />
+          <p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>
+            Receive instant alerts when someone submits a job application.
+          </p>
         </div>
       </div>
 
-      {/* Setup guide */}
-      <div style={{padding:16,background:"#F0F9FF",borderRadius:10,border:"1px solid #BAE6FD"}}>
-        <p style={{fontSize:12,fontWeight:700,color:"#0369A1",marginBottom:8}}>📋 Quick Setup (5 min)</p>
-        <ol style={{fontSize:12,color:"#374151",lineHeight:2,paddingLeft:16,margin:0}}>
-          <li>Go to <strong>emailjs.com</strong> → Create free account</li>
-          <li><strong>Email Services</strong> → Connect your Gmail/Outlook</li>
-          <li><strong>Email Templates</strong> → Create 3 templates (activation, career applicant, career admin)</li>
-          <li>Copy <strong>Service ID</strong> + <strong>Public Key</strong> from Account → API Keys</li>
-          <li>Paste all IDs above → Click Save Settings</li>
-        </ol>
+      {/* Setup steps */}
+      <div style={{marginTop:20,padding:16,background:"#F0FDF4",borderRadius:10,border:"1px solid #BBF7D0"}}>
+        <p style={{fontSize:12,fontWeight:700,color:"#15803D",marginBottom:10}}>📋 Setup in 3 steps</p>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {[
+            ["1","Go to brevo.com → Sign up free (use your Gmail)"],
+            ["2","Top-right menu → SMTP & API → API Keys → Generate → Copy the key"],
+            ["3","Add your sender email under Senders & IPs → Verify it → Paste above → Save"],
+          ].map(([n,t])=>(
+            <div key={n} style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <div style={{width:22,height:22,borderRadius:"50%",background:"#15803D",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,flexShrink:0}}>{n}</div>
+              <p style={{fontSize:13,color:"#374151",lineHeight:1.6}}>{t}</p>
+            </div>
+          ))}
+        </div>
       </div>
+    </div>
+
+    {/* CHATBOT SETTING */}
+    <div style={{background:"#fff",padding:32,borderRadius:16,border:"1px solid rgba(45,51,71,0.07)",marginBottom:24}}>
+      <h2 style={{fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Chatbot & Support</h2>
+      <p style={{fontSize:13,color:"#9CA3AF",marginBottom:20}}>Control the live chat widget shown on your platform.</p>
+      <label style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",padding:"16px 20px",background:chatbotEnabled?`${C.success}08`:C.bg,borderRadius:12,border:`1.5px solid ${chatbotEnabled?C.success:"#E8E4DD"}`,transition:"all 0.2s"}}>
+        <div>
+          <p style={{fontSize:15,fontWeight:700,color:chatbotEnabled?C.success:C.navy}}>{chatbotEnabled?"✓ Chatbot Enabled":"Chatbot Disabled"}</p>
+          <p style={{fontSize:13,color:"#9CA3AF",marginTop:3}}>{chatbotEnabled?"Chat widget is visible to all visitors":"Chat widget is hidden from the site"}</p>
+        </div>
+        {/* Toggle switch */}
+        <div style={{position:"relative",width:48,height:26,borderRadius:13,background:chatbotEnabled?C.success:"#D1D5DB",transition:"background 0.2s",flexShrink:0}}>
+          <div style={{position:"absolute",top:3,left:chatbotEnabled?26:3,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.2)"}}/>
+          <input type="checkbox" checked={chatbotEnabled} onChange={e=>setChatbotEnabled(e.target.checked)} style={{opacity:0,position:"absolute",inset:0,cursor:"pointer"}}/>
+        </div>
+      </label>
+      <p style={{fontSize:12,color:"#9CA3AF",marginTop:10}}>
+        When disabled, the chatbot button and WhatsApp escalation are completely hidden. Changes take effect after Save.
+      </p>
     </div>
 
     <div style={{background:"#fff",padding:32,borderRadius:16,border:"1px solid rgba(45,51,71,0.07)",marginBottom:24}}>
@@ -3816,106 +4564,242 @@ const S = {
 // ═══════════════════════════════════════════
 // CHATBOT WIDGET — customer service
 // ═══════════════════════════════════════════
+const WHATSAPP_URL = "https://api.whatsapp.com/message/EQYMUTLCLKWIE1?autoload=1&app_absent=0";
+
 function ChatbotWidget({ isRTL }) {
-  const [open,    setOpen]    = useState(false);
-  const [msgs,    setMsgs]    = useState([
-    { from:"bot", text: isRTL ? "مرحباً! 👋 كيف أستطيع مساعدتك اليوم؟" : "Hi there! 👋 How can I help you today?" }
+  const [open,        setOpen]        = useState(false);
+  const [msgs,        setMsgs]        = useState([
+    { from:"bot", text: isRTL ? "مرحباً! 👋 كيف أستطيع مساعدتك اليوم؟" : "Hi there! 👋 How can I help you today?", type:"text" }
   ]);
-  const [input,   setInput]   = useState("");
-  const [typing,  setTyping]  = useState(false);
+  const [input,       setInput]       = useState("");
+  const [typing,      setTyping]      = useState(false);
+  const [unmatchCount,setUnmatchCount] = useState(0); // how many times bot couldn't answer
   const endRef = useRef();
 
+  const WA_URL = WHATSAPP_URL;
+
   const quickReplies = isRTL
-    ? ["كيف أسجّل في كورس؟","ما وسائل الدفع؟","هل هناك استرداد؟","تواصل مع الدعم"]
-    : ["How do I enroll?","Payment methods?","Refund policy?","Talk to support"];
+    ? ["كيف أسجّل في كورس؟","ما وسائل الدفع؟","سياسة الاسترداد؟","هل الكورسات بالعربي؟","تحدث مع موظف 💬"]
+    : ["How do I enroll?","Payment methods?","Refund policy?","Are courses in Arabic?","Talk to an agent 💬"];
 
   const autoReplies = isRTL ? {
-    "كيف أسجّل": "تصفح الكورسات، اختر الكورس المناسب، ثم اضغط 'اشترك الآن' واتبع خطوات الدفع الآمن.",
-    "الدفع": "نقبل البطاقات الائتمانية، Apple Pay، STC Pay، وAmazon Pay. جميع الأسعار تشمل ضريبة القيمة المضافة 15%.",
-    "استرداد": "نقدم ضمان استرداد كامل خلال 7 أيام من الشراء دون أي شروط.",
-    "دعم": "يمكنك التواصل مع فريقنا على support@orbit.sa — الأحد إلى الخميس، 9ص–6م.",
+    "أسجّل":    "تصفح الكورسات، اختر الكورس المناسب، ثم اضغط 'اشترك الآن' واتبع خطوات الدفع الآمن. 🎓",
+    "كورس":     "تصفح الكورسات، اختر الكورس المناسب، ثم اضغط 'اشترك الآن' واتبع خطوات الدفع الآمن. 🎓",
+    "الدفع":    "نقبل البطاقات الائتمانية، Apple Pay، STC Pay، وAmazon Pay. جميع الأسعار تشمل ضريبة القيمة المضافة 15%.",
+    "دفع":      "نقبل البطاقات الائتمانية، Apple Pay، STC Pay، وAmazon Pay. جميع الأسعار تشمل ضريبة القيمة المضافة 15%.",
+    "استرداد":  "__REFUND__",
+    "عربي":     "نعم! الكورسات متاحة باللغتين العربية والإنجليزية. يمكنك تبديل اللغة من الزر أعلى الصفحة.",
+    "لغة":      "نعم! الكورسات متاحة باللغتين العربية والإنجليزية. يمكنك تبديل اللغة من الزر أعلى الصفحة.",
+    "شهادة":    "نعم، تحصل على شهادة إتمام رسمية عند اجتياز جميع دروس الكورس. 🎓",
+    "مجاني":    "بعض الكورسات مجانية تماماً! ابحث عنها في صفحة الكورسات وابدأ فوراً.",
+    "موظف":     "__AGENT__",
+    "دعم":      "__AGENT__",
+    "تحدث":     "__AGENT__",
   } : {
-    "enroll": "Browse courses, choose the right one, then click 'Enroll Now' and follow the secure payment steps.",
-    "payment": "We accept credit cards, Apple Pay, STC Pay, and Amazon Pay. All prices include 15% VAT.",
-    "refund": "We offer a full 7-day money-back guarantee, no questions asked.",
-    "support": "You can reach our team at support@orbit.sa — Sunday to Thursday, 9am–6pm.",
+    "enroll":   "Browse courses, pick the one you like, then click 'Enroll Now' and follow the payment steps. 🎓",
+    "course":   "Browse courses, pick the one you like, then click 'Enroll Now' and follow the payment steps. 🎓",
+    "payment":  "We accept credit cards, Apple Pay, STC Pay, and Amazon Pay. All prices include 15% VAT.",
+    "pay":      "We accept credit cards, Apple Pay, STC Pay, and Amazon Pay. All prices include 15% VAT.",
+    "refund":   "__REFUND__",
+    "arabic":   "Yes! All courses are available in both Arabic and English. Toggle the language from the top navbar.",
+    "language": "Yes! All courses are available in both Arabic and English. Toggle the language from the top navbar.",
+    "certif":   "Yes, you get an official completion certificate once you finish all lessons and pass the exam. 🎓",
+    "free":     "Some courses are completely free! Browse the courses page and look for the FREE badge.",
+    "agent":    "__AGENT__",
+    "human":    "__AGENT__",
+    "support":  "__AGENT__",
+    "talk":     "__AGENT__",
+    "person":   "__AGENT__",
+    "help":     "__AGENT__",
+  };
+
+  // WhatsApp handoff card
+  const showWhatsAppCard = (context) => {
+    const waMsg = encodeURIComponent(
+      isRTL
+        ? `مرحباً، أحتاج مساعدة${context ? ` بخصوص: ${context}` : ""}`
+        : `Hi, I need help${context ? ` with: ${context}` : ""} from the Orbit Learning chatbot`
+    );
+    return { from:"bot", type:"whatsapp", url:`${WA_URL}&text=${waMsg}` };
   };
 
   const sendMsg = (text) => {
     if (!text.trim()) return;
-    const newMsgs = [...msgs, {from:"user", text}];
+    const userMsg = text.trim();
+    const newMsgs = [...msgs, {from:"user", text:userMsg, type:"text"}];
     setMsgs(newMsgs);
     setInput("");
     setTyping(true);
+
     setTimeout(()=>{
-      const lower = text.toLowerCase();
-      let reply = isRTL ? "شكراً لرسالتك! سيتواصل معك فريق الدعم قريباً على support@orbit.sa" : "Thanks for your message! Our support team will reach you soon at support@orbit.sa";
+      const lower = userMsg.toLowerCase();
+      let reply = null;
+      let isAgent = false;
+
+      // Check auto replies
       for (const [key, val] of Object.entries(autoReplies)) {
-        if (lower.includes(key)) { reply = val; break; }
+        if (lower.includes(key)) {
+          if (val === "__AGENT__" || val === "__REFUND__") { isAgent = true; }
+          else { reply = val; }
+          break;
+        }
       }
-      setMsgs(p=>[...p,{from:"bot",text:reply}]);
+
+      if (isAgent || val === "__REFUND__") {
+        const isRefund = val === "__REFUND__";
+        const botText = isRefund
+          ? (isRTL
+              ? "طلبات الاسترداد تتم عبر خدمة العملاء مباشرةً. تواصل معنا على واتساب وسنساعدك في أسرع وقت. 💰"
+              : "Refund requests are handled directly by our customer service team. Contact us on WhatsApp and we'll assist you right away. 💰")
+          : (isRTL
+              ? "سأحولك الآن لأحد موظفي خدمة العملاء على واتساب. 🟢"
+              : "I'll connect you with a live agent on WhatsApp right now. 🟢");
+        setMsgs(p=>[...p,
+          {from:"bot", text:botText, type:"text"},
+          showWhatsAppCard(isRefund ? (isRTL?"طلب استرداد":"Refund request") : userMsg),
+        ]);
+        setUnmatchCount(0);
+      } else if (reply) {
+        setMsgs(p=>[...p,{from:"bot",text:reply,type:"text"}]);
+        setUnmatchCount(0);
+      } else {
+        // Didn't understand
+        const newCount = unmatchCount + 1;
+        setUnmatchCount(newCount);
+        if (newCount >= 2) {
+          // After 2 unmatched — proactively offer WhatsApp
+          const botText = isRTL
+            ? "يبدو أنني لم أتمكن من فهم سؤالك بشكل كافٍ. أنصحك بالتحدث مع أحد موظفينا مباشرةً على واتساب 👇"
+            : "I'm having trouble understanding your question. Let me connect you with a live agent on WhatsApp 👇";
+          setMsgs(p=>[...p,
+            {from:"bot", text:botText, type:"text"},
+            showWhatsAppCard(userMsg),
+          ]);
+          setUnmatchCount(0);
+        } else {
+          const botText = isRTL
+            ? "آسف، لم أفهم سؤالك جيداً. هل يمكنك إعادة الصياغة؟ أو يمكنني تحويلك لموظف دعم مباشر."
+            : "Sorry, I didn't quite catch that. Could you rephrase? Or I can connect you with a live agent.";
+          setMsgs(p=>[...p,{from:"bot",text:botText,type:"text"}]);
+        }
+      }
       setTyping(false);
-    }, 800);
+    }, 750);
   };
 
-  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:"smooth"}); },[msgs, typing]);
+  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:"smooth"}); },[msgs,typing]);
+
+  // WhatsApp card component (inline)
+  const WACard = ({url}) => (
+    <div style={{marginBottom:12,display:"flex",justifyContent:"flex-start"}}>
+      <a href={url} target="_blank" rel="noopener noreferrer"
+        style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:"#25D366",borderRadius:"16px 16px 16px 4px",textDecoration:"none",maxWidth:"85%",boxShadow:"0 2px 8px rgba(37,211,102,0.3)"}}>
+        {/* WhatsApp icon */}
+        <div style={{width:36,height:36,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/>
+          </svg>
+        </div>
+        <div>
+          <p style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:2}}>
+            {isRTL?"تحدث مع موظف الآن":"Chat with an agent now"}
+          </p>
+          <p style={{fontSize:11,color:"rgba(255,255,255,0.85)"}}>
+            {isRTL?"واتساب · يرد خلال دقائق":"WhatsApp · Usually replies in minutes"}
+          </p>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="white" style={{marginLeft:"auto",flexShrink:0,opacity:0.8}}>
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </a>
+    </div>
+  );
 
   return (
     <div style={{position:"fixed",bottom:24,right:isRTL?undefined:24,left:isRTL?24:undefined,zIndex:999}}>
-      {/* CHAT WINDOW */}
       {open && (
         <div style={{width:340,background:"#fff",borderRadius:20,boxShadow:"0 8px 40px rgba(45,51,71,0.18)",border:"1px solid rgba(45,51,71,0.08)",marginBottom:12,overflow:"hidden",direction:isRTL?"rtl":"ltr",fontFamily:isRTL?"'Cairo',sans-serif":"'DM Sans',sans-serif"}}>
+
           {/* HEADER */}
           <div style={{background:C.navy,padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
               <div style={{width:36,height:36,borderRadius:"50%",background:C.gold,display:"flex",alignItems:"center",justifyContent:"center"}}><OrbitLogo size={22} light/></div>
               <div>
                 <p style={{fontSize:14,fontWeight:700,color:C.cream}}>Orbit Support</p>
-                <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:6,height:6,borderRadius:"50%",background:"#4ADE80"}}/><p style={{fontSize:11,color:"rgba(213,207,193,0.7)"}}>{isRTL?"متصل الآن":"Online now"}</p></div>
+                <div style={{display:"flex",alignItems:"center",gap:5}}>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:"#4ADE80"}}/>
+                  <p style={{fontSize:11,color:"rgba(213,207,193,0.7)"}}>{isRTL?"متصل الآن":"Online now"}</p>
+                </div>
               </div>
             </div>
-            <button onClick={()=>setOpen(false)} style={{color:"rgba(213,207,193,0.7)",display:"flex"}}><I.X/></button>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              {/* Direct WhatsApp button in header */}
+              <a href={WA_URL} target="_blank" rel="noopener noreferrer"
+                title={isRTL?"تحدث مع موظف":"Talk to agent"}
+                style={{width:30,height:30,borderRadius:"50%",background:"#25D366",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>
+              </a>
+              <button onClick={()=>setOpen(false)} style={{color:"rgba(213,207,193,0.7)",display:"flex"}}><I.X/></button>
+            </div>
           </div>
 
           {/* MESSAGES */}
-          <div style={{height:280,overflowY:"auto",padding:"16px 16px 8px"}}>
+          <div style={{height:290,overflowY:"auto",padding:"16px 14px 8px"}}>
             {msgs.map((m,i)=>(
-              <div key={i} style={{marginBottom:12,display:"flex",justifyContent:m.from==="user"?"flex-end":"flex-start"}}>
-                <div style={{maxWidth:"82%",padding:"10px 14px",borderRadius:m.from==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.from==="user"?C.gold:"#F5F2ED",color:m.from==="user"?"#fff":C.navy,fontSize:13,lineHeight:1.6,textAlign:isRTL?"right":"left"}}>
-                  {m.text}
-                </div>
-              </div>
+              m.type==="whatsapp"
+                ? <WACard key={i} url={m.url}/>
+                : (
+                  <div key={i} style={{marginBottom:10,display:"flex",justifyContent:m.from==="user"?"flex-end":"flex-start"}}>
+                    <div style={{maxWidth:"82%",padding:"10px 14px",borderRadius:m.from==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.from==="user"?C.gold:"#F5F2ED",color:m.from==="user"?"#fff":C.navy,fontSize:13,lineHeight:1.6,textAlign:isRTL?"right":"left"}}>
+                      {m.text}
+                    </div>
+                  </div>
+                )
             ))}
-            {typing && <div style={{display:"flex",gap:4,padding:"8px 14px",background:"#F5F2ED",borderRadius:"16px 16px 16px 4px",width:"fit-content",marginBottom:12}}>
-              {[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:"#9CA3AF",animation:`bounce 1s ${i*0.2}s infinite`}}/>)}
-            </div>}
+            {typing && (
+              <div style={{display:"flex",gap:4,padding:"10px 14px",background:"#F5F2ED",borderRadius:"16px 16px 16px 4px",width:"fit-content",marginBottom:10}}>
+                {[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:"#9CA3AF",animation:`bounce 1s ${i*0.2}s infinite`}}/>)}
+              </div>
+            )}
             <div ref={endRef}/>
           </div>
 
           {/* QUICK REPLIES */}
-          <div style={{padding:"0 12px 8px",display:"flex",flexWrap:"wrap",gap:6}}>
-            {quickReplies.map((q,i)=><button key={i} onClick={()=>sendMsg(q)} style={{padding:"5px 12px",background:"#F0ECE5",borderRadius:20,fontSize:11,fontWeight:600,color:C.navy}}>{q}</button>)}
+          <div style={{padding:"0 12px 8px",display:"flex",flexWrap:"wrap",gap:5}}>
+            {quickReplies.map((q,i)=>(
+              <button key={i} onClick={()=>sendMsg(q)}
+                style={{padding:"5px 12px",background: q.includes("agent")||q.includes("موظف")?"#25D36618":"#F0ECE5",
+                  border: q.includes("agent")||q.includes("موظف")?"1px solid #25D36640":"none",
+                  borderRadius:20,fontSize:11,fontWeight:600,
+                  color: q.includes("agent")||q.includes("موظف")?"#128C5E":C.navy}}>
+                {q}
+              </button>
+            ))}
           </div>
 
           {/* INPUT */}
-          <div style={{padding:"8px 12px 14px",display:"flex",gap:8}}>
+          <div style={{padding:"8px 12px 14px",display:"flex",gap:8,borderTop:"1px solid #F0ECE5"}}>
             <input
               value={input}
               onChange={e=>setInput(e.target.value)}
               onKeyDown={e=>e.key==="Enter"&&sendMsg(input)}
               placeholder={isRTL?"اكتب رسالتك...":"Type your message..."}
-              style={{...S.input,fontSize:13,padding:"10px 14px",flex:1,textAlign:isRTL?"right":"left"}}
+              style={{...S.input,fontSize:13,padding:"9px 12px",flex:1,textAlign:isRTL?"right":"left"}}
             />
-            <button onClick={()=>sendMsg(input)} style={{width:38,height:38,borderRadius:10,background:C.gold,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+            <button onClick={()=>sendMsg(input)}
+              style={{width:36,height:36,borderRadius:9,background:C.gold,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="white"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
             </button>
           </div>
         </div>
       )}
 
       {/* TOGGLE BUTTON */}
-      <button onClick={()=>setOpen(!open)} style={{width:56,height:56,borderRadius:"50%",background:open?C.navy:C.gold,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 16px rgba(184,150,90,0.35)",transition:"all 0.2s",marginLeft:isRTL?0:"auto",marginRight:isRTL?"auto":0}}>
-        {open ? <I.X/> : <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>}
+      <button onClick={()=>setOpen(!open)}
+        style={{width:56,height:56,borderRadius:"50%",background:open?C.navy:C.gold,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 16px rgba(184,150,90,0.35)",transition:"all 0.2s"}}>
+        {open
+          ? <I.X/>
+          : <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>}
       </button>
 
       <style>{`@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}`}</style>
