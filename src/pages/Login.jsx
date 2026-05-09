@@ -46,12 +46,6 @@ export function Login() {
             </div>
           )}
 
-          {/* Demo credentials hint */}
-          <div className="p-3 bg-orbit-gold/8 border border-orbit-gold/20 rounded-xl text-xs text-orbit-navy/70 mb-5">
-            <p className="font-semibold mb-1">Demo Admin:</p>
-            <p>Email: admin@orbit.com · Password: OrbitAdmin2026!</p>
-          </div>
-
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="orbit-label">Email</label>
