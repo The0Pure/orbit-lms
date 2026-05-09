@@ -50,7 +50,7 @@ export default async function handler(req, res) {
     const { userId, courseId, orderId, discountId } = session.metadata;
 
     if (!userId || !courseId) {
-      console.error('Missing metadata in payment intent:', intent.id);
+      console.error('Missing metadata in checkout session:', session.id);
       return res.status(400).json({ error: 'Missing metadata' });
     }
 
