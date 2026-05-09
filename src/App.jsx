@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from "react";
+import { useAuth } from "./context/AuthContext";
+import { useCourses } from "./context/CourseContext";
+import { supabase } from "./lib/supabase";
 
 // ═══════════════════════════════════════════
 // BRAND COLORS
@@ -175,17 +178,6 @@ const CAT_AR = {
   "Security":"الأمن","Mobile":"تطوير الجوال","Business":"الأعمال","Marketing":"التسويق",
 };
 const LEVEL_AR = { Beginner:"مبتدئ", Intermediate:"متوسط", Advanced:"متقدم" };
-// ═══════════════════════════════════════════
-// SECURITY — admin auth (hash-based, no plaintext in UI)
-// In production: move to server-side auth (Supabase, Firebase, etc.)
-// ═══════════════════════════════════════════
-// ═══════════════════════════════════════════
-// SECURITY — admin auth (obfuscated, no plaintext)
-// Production: migrate to server-side auth (Supabase / Firebase Auth)
-// ═══════════════════════════════════════════
-const _a = "bGlua3liaW5reTlAZ21haWwuY29t";
-const _b = "bUdteiRkcXlUN0pxUktLRUJlNkE=";
-const checkAdmin = (e,p) => btoa(e)===_a && btoa(p)===_b;
 
 // ═══════════════════════════════════════════
 // LOCAL STORAGE HELPERS
@@ -196,31 +188,8 @@ const ss = (k,v) => localStorage.setItem(k,JSON.stringify(v));
 // ═══════════════════════════════════════════
 // SECURITY UTILITIES
 // ═══════════════════════════════════════════
-const sanitize = (str) => String(str||"").replace(/[<>'"]/g,"").trim().slice(0,500);
-
-// Login rate limiter — max 5 attempts per 15 min
-const loginLimiter = {
-  key: "orb_login_attempts",
-  check() {
-    const data = ls(this.key, {count:0, ts: Date.now()});
-    const elapsed = Date.now() - data.ts;
-    if (elapsed > 15 * 60 * 1000) { ss(this.key, {count:0, ts:Date.now()}); return true; }
-    return data.count < 5;
-  },
-  increment() {
-    const data = ls(this.key, {count:0, ts:Date.now()});
-    const elapsed = Date.now() - data.ts;
-    const ts = elapsed > 15*60*1000 ? Date.now() : data.ts;
-    const count = elapsed > 15*60*1000 ? 1 : data.count+1;
-    ss(this.key, {count, ts});
-  },
-  reset() { ss(this.key, {count:0, ts:Date.now()}); },
-  remaining() {
-    const data = ls(this.key, {count:0, ts:Date.now()});
-    const mins = Math.ceil((15*60*1000 - (Date.now()-data.ts))/60000);
-    return { locked: data.count>=5, mins };
-  }
-};
+// Strip characters that could form HTML/SVG injection payloads
+const sanitize = (str) => String(str || "").replace(/[<>'"&`\x00]/g, "").trim().slice(0, 500);
 // ═══════════════════════════════════════════
 // LOGO
 // ═══════════════════════════════════════════
@@ -458,24 +427,36 @@ async function sendEmail(type, params) {
 // MAIN APP
 // ═══════════════════════════════════════════
 export default function App() {
+  // ── UI state (preferences stored in localStorage are acceptable) ──
   const [page,       setPage]       = useState("home");
   const [adminSec,   setAdminSec]   = useState("overview");
   const [mobileMenu, setMobileMenu] = useState(false);
-  const [user,       setUser]       = useState(null);
-  const [courses,    setCourses]    = useState(()=>ls("orb_courses",[]));
-  const [orders,     setOrders]     = useState(()=>ls("orb_orders",[]));
-  const [users,      setUsers]      = useState(()=>ls("orb_users",[]));
   const [selCourse,  setSelCourse]  = useState(null);
   const [payModal,   setPayModal]   = useState(null);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [catFilter,  setCatFilter]  = useState("All");
-  const [lang,       setLang]           = useState(()=>ls("orb_lang","en"));
-  const [siteName,   setSiteNameApp]     = useState(()=>ls("orb_siteName","Orbit Learning"));
-  const [activationSuccess, setActivationSuccess] = useState(false);
-  const [resetToken, setResetToken]   = useState(""); // triggers reset modal when set
-  const [resetUserId, setResetUserId] = useState("");
+  const [lang,       setLang]       = useState(()=>ls("orb_lang","en"));
+  const [siteName,   setSiteNameApp] = useState(()=>ls("orb_siteName","Orbit Learning"));
+  // showResetModal is set when Supabase redirects back with ?type=recovery
+  const [showResetModal, setShowResetModal] = useState(false);
 
-  const t   = T[lang] || T.en;
+  // ── Backend contexts ──────────────────────────────────────
+  const {
+    user, isAdmin, isLoggedIn: isLogged, loading: authLoading,
+    login: authLogin, signup: authSignup, logout: authLogout, loginWithGoogle,
+    updatePassword, enrolledCourseIds, refreshEnrollments,
+  } = useAuth();
+
+  // Attach enrolledCourseIds to user so existing components work unchanged
+  const userWithEnrollments = user ? { ...user, enrolledCourses: enrolledCourseIds } : null;
+
+  const {
+    courses, orders, publishedCourses,
+    addCourse, updateCourse, deleteCourse, createPendingOrder,
+    validateDiscountCode,
+  } = useCourses();
+
+  const t     = T[lang] || T.en;
   const isRTL = lang === "ar";
 
   const toggleLang = () => {
@@ -483,257 +464,23 @@ export default function App() {
     setLang(next); ss("orb_lang", next);
   };
 
-  const save = (k,v,fn) => { fn(v); ss(k,v); };
-  const saveCourses = v => save("orb_courses",v,setCourses);
-  const saveOrders  = v => save("orb_orders",v,setOrders);
-  const saveUsers   = v => save("orb_users",v,setUsers);
+  // ── Route protection ──────────────────────────────────────
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isLogged && (page === "dashboard" || page === "admin")) setPage("login");
+    if (isLogged && isAdmin && page === "login") setPage("admin");
+    if (isLogged && !isAdmin && page === "login") setPage("dashboard");
+  }, [authLoading, isLogged, isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isAdmin  = user?.role === "admin";
-  const isLogged = !!user;
-
-  // ── AUTH ──
-  const login = (email,pw) => {
-    const { locked, mins } = loginLimiter.remaining();
-    if (locked) return { ok:false, msg:`Too many attempts. Try again in ${mins} min.` };
-
-    const cleanEmail = sanitize(email).toLowerCase();
-    const cleanPw    = sanitize(pw);
-
-    if (checkAdmin(cleanEmail, cleanPw)) {
-      loginLimiter.reset();
-      const a={id:"admin",email:cleanEmail,name:"Admin",role:"admin"};
-      setUser(a); ss("orb_user",a); setPage("admin"); return { ok:true };
-    }
-    const f = users.find(u=>u.email===cleanEmail && u.password===cleanPw);
-    if (f) {
-      if (f.verified === false) {
-        return { ok:false, msg: isRTL
-          ? "يرجى تفعيل حسابك أولاً. تحقق من بريدك الإلكتروني للحصول على رابط التفعيل."
-          : "Please verify your email first. Check your inbox for the activation link." };
-      }
-      loginLimiter.reset();
-      const {password:_,...s}=f; setUser(s); ss("orb_user",s); setPage("dashboard"); return { ok:true };
-    }
-    loginLimiter.increment();
-    return { ok:false, msg:"Invalid email or password" };
-  };
-  const signup = async (fd) => {
-    const cleanEmail = sanitize(fd.email).toLowerCase();
-    if (users.find(u=>u.email===cleanEmail)) return { ok:false, msg:"email_exists" };
-    // Generate activation token
-    const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    const nu = {
-      id:`u-${Date.now()}`,
-      firstName: sanitize(fd.firstName),
-      lastName:  sanitize(fd.lastName),
-      name:`${sanitize(fd.firstName)} ${sanitize(fd.lastName)}`,
-      email:     cleanEmail,
-      phone:     sanitize(fd.phone||""),
-      password:  fd.password,
-      role:"student",
-      verified:  false,      // must verify email before login
-      token:     token,
-      enrolledCourses:[],
-      certificates:[]
-    };
-    saveUsers([...users,nu]);
-
-    // ── SEND ACTIVATION EMAIL ──
-    const activationUrl = `${window.location.origin}/?activate=${token}`;
-    await sendEmail("activation", {
-      to_name:      nu.firstName,
-      to_email:     cleanEmail,
-      activate_url: activationUrl,
-      platform:     ls("orb_siteName","Orbit Learning"),
-      subject:      `Activate your ${ls("orb_siteName","Orbit Learning")} account`,
-    });
-
-    return { ok:true, activationUrl };
-  };
-  const logout = () => { setUser(null); localStorage.removeItem("orb_user"); setPage("home"); setAvatarOpen(false); };
-
-  // ── SOCIAL LOGIN (OAuth) ──
-  const handleSocialLogin = (provider) => {
-    if (provider !== "google") return;
-    const clientId = "485439031935-tqt4qasj02os6u7pd05rqn902hck6u1c.apps.googleusercontent.com";
-    const params = new URLSearchParams({
-      client_id:     clientId,
-      redirect_uri:  window.location.origin,
-      response_type: "token id_token",
-      scope:         "openid email profile",
-      nonce:         Math.random().toString(36).slice(2),
-      prompt:        "select_account",
-    });
-    const popup = window.open(
-      `https://accounts.google.com/o/oauth2/v2/auth?${params}`,
-      "google_oauth",
-      "width=500,height=600,left=400,top=100"
-    );
-    if (!popup) {
-      alert("Please allow popups for this site to use Google Sign-In.");
-      return;
-    }
-    const checkPopup = setInterval(() => {
-      try {
-        if (!popup || popup.closed) { clearInterval(checkPopup); return; }
-        const hash = popup.location.hash;
-        if (hash && hash.includes("access_token")) {
-          clearInterval(checkPopup);
-          popup.close();
-          const idToken = new URLSearchParams(hash.slice(1)).get("id_token");
-          if (idToken) {
-            const payload = JSON.parse(
-              atob(idToken.split(".")[1].replace(/-/g,"+").replace(/_/g,"/"))
-            );
-            _completeSocialLogin({
-              name:    payload.name,
-              email:   payload.email,
-              picture: payload.picture,
-            }, "google");
-          }
-        }
-      } catch {}
-    }, 500);
-  };
-
-  const _completeSocialLogin = (profile, provider) => {
-    const email = profile.email?.toLowerCase();
-    if (!email) return;
-    // Find existing user or auto-register
-    let existing = users.find(u => u.email === email);
-    if (!existing) {
-      const nameParts = (profile.name || email.split("@")[0]).split(" ");
-      const nu = {
-        id: `u-${Date.now()}`,
-        firstName: nameParts[0] || "",
-        lastName:  nameParts.slice(1).join(" ") || "",
-        name:      profile.name || email.split("@")[0],
-        email,
-        password:  "",
-        role:      "student",
-        provider,
-        avatar:    profile.picture || "",
-        enrolledCourses: [],
-        certificates:    [],
-      };
-      const updated = [...users, nu];
-      saveUsers(updated);
-      existing = nu;
-    }
-    const { password: _, ...safe } = existing;
-    setUser(safe); ss("orb_user", safe); setPage("dashboard");
-  };
-
-  // ── NAVIGATION ──
-  const nav = (p,c) => {
-    if (c) setSelCourse(c);
-    setPage(p);
-    setMobileMenu(false);
-    setAvatarOpen(false);
-    window.scrollTo?.(0,0);
-  };
-
-  // Navigate with category filter pre-set
-  const navWithCat = (cat) => {
-    setCatFilter(cat);
-    nav("courses");
-  };
-
-  // ── COURSE CRUD ──
-  const addCourse    = c => { const nc={...c,id:`c-${Date.now()}`,students:0,rating:0,createdAt:new Date().toISOString()}; saveCourses([...courses,nc]); return nc; };
-  const updateCourse = (id,u) => saveCourses(courses.map(c=>c.id===id?{...c,...u}:c));
-  const deleteCourse = id => saveCourses(courses.filter(c=>c.id!==id));
-
-  // ── ENROLL / PAYMENT ──
-  const handleEnroll = (course) => {
-    if (!isLogged) { nav("login"); return; }
-    if (user.enrolledCourses?.includes(course.id)) { nav("course-learn",course); return; }
-    // Free course — skip payment modal entirely
-    if (course.isFree || Number(course.price)===0) {
-      completePayment(course, "free", null);
-      return;
-    }
-    setPayModal(course);
-  };
-
-  const completePayment = (course, method, discount) => {
-    const idx = users.findIndex(u=>u.id===user.id);
-    if (idx===-1) return;
-    const uu=[...users];
-    if (!uu[idx].enrolledCourses.includes(course.id)) uu[idx].enrolledCourses.push(course.id);
-    saveUsers(uu);
-    const updated={...user,enrolledCourses:uu[idx].enrolledCourses};
-    setUser(updated); ss("orb_user",updated);
-    updateCourse(course.id,{students:(course.students||0)+1});
-    // Calculate final amount paid
-    const subtotal  = Number(course.price)||0;
-    const discAmt   = discount
-      ? discount.type==="percent"
-        ? Math.round(subtotal*(discount.value/100))
-        : Math.min(discount.value,subtotal)
-      : 0;
-    const afterDisc = Math.max(0,subtotal-discAmt);
-    const vat       = Math.round(afterDisc*0.15);
-    const total     = method==="free" ? 0 : afterDisc+vat;
-    const order={
-      id:`ord-${Date.now()}`,userId:user.id,userName:user.name,userEmail:user.email,
-      courseId:course.id,courseName:course.title,
-      originalAmount:subtotal,discountCode:discount?.code||null,discountAmt:discAmt,
-      amount:total,method,status:"completed",
-      date:new Date().toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"})
-    };
-    saveOrders([...orders,order]);
-    setPayModal(null);
-    if (method==="free") nav("course-learn",course);
-  };
-
-  // ── ADMIN USER MANAGEMENT ──
-  const addUserAdmin = (userData) => {
-    if (users.find(u=>u.email===userData.email)) return false;
-    const nu={id:`u-${Date.now()}`,...userData,name:`${userData.firstName} ${userData.lastName}`,enrolledCourses:[],certificates:[]};
-    saveUsers([...users,nu]); return true;
-  };
-  const updateUser   = (id,u) => saveUsers(users.map(x=>x.id===id?{...x,...u}:x));
-  const deleteUser   = id => saveUsers(users.filter(x=>x.id!==id));
-
-  useEffect(()=>{
-    const s=ls("orb_user",null); if(s) setUser(s);
-
-    // Handle activation link: ?activate=TOKEN
+  // ── Handle Supabase auth redirects ───────────────────────
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token  = params.get("activate");
-    if (token) {
-      const allUsers = ls("orb_users",[]);
-      const found    = allUsers.find(u=>u.token===token);
-      if (found && !found.verified) {
-        const updated = allUsers.map(u=>u.token===token ? {...u,verified:true,token:""} : u);
-        ss("orb_users", updated);
-        const {password:_,...safe} = updated.find(u=>u.id===found.id);
-        setUser(safe); ss("orb_user",safe);
-        window.history.replaceState({},"",window.location.pathname);
-        setPage("dashboard");
-        setActivationSuccess(true);
-        setTimeout(()=>setActivationSuccess(false), 6000);
-      }
+    const hash   = new URLSearchParams(window.location.hash.slice(1));
+    // Supabase password recovery redirect
+    if (params.get("type") === "recovery" || hash.get("type") === "recovery") {
+      window.history.replaceState({}, "", window.location.pathname);
+      setShowResetModal(true);
     }
-
-    // Handle reset password link: ?reset=TOKEN
-    const resetTk = params.get("reset");
-    if (resetTk) {
-      const allUsers = ls("orb_users",[]);
-      const found    = allUsers.find(u=>u.resetToken===resetTk);
-      if (found && found.resetExpiry > Date.now()) {
-        window.history.replaceState({},"",window.location.pathname);
-        setResetToken(resetTk);
-        setResetUserId(found.id);
-        setPage("login");
-      } else {
-        window.history.replaceState({},"",window.location.pathname);
-        // Expired or invalid — let user request a new one
-        setPage("login");
-      }
-    }
-
     // Favicon
     const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
       <rect width="100" height="100" rx="22" fill="#2D3347"/>
@@ -745,12 +492,123 @@ export default function App() {
     let link = document.querySelector("link[rel~='icon']");
     if (!link) { link = document.createElement("link"); link.rel = "icon"; document.head.appendChild(link); }
     link.href = faviconUrl;
-    document.title = ls("orb_siteName","Orbit Learning");
-  },[]);
+    document.title = ls("orb_siteName", "Orbit Learning");
+  }, []);
 
-  const isAuth = page==="login"||page==="signup";
-  const isAdm  = page==="admin";
-  const pub    = courses.filter(c=>c.published);
+  // ── Auth wrappers (adapt context API to what the UI components expect) ──
+  const login = async (email, pw) => {
+    const result = await authLogin(email, pw);
+    if (result.success) setPage(result.role === "admin" ? "admin" : "dashboard");
+    return result.success ? { ok: true } : { ok: false, msg: result.error };
+  };
+
+  const signup = async (fd) => {
+    const result = await authSignup({
+      firstName: sanitize(fd.firstName),
+      lastName:  sanitize(fd.lastName),
+      email:     sanitize(fd.email).toLowerCase(),
+      password:  fd.password,
+    });
+    if (!result.success) return { ok: false, msg: result.error };
+    return { ok: true, emailConfirmationRequired: result.emailConfirmationRequired };
+  };
+
+  const logout = async () => {
+    await authLogout();
+    setPage("home");
+    setAvatarOpen(false);
+  };
+
+  // Supabase handles Google OAuth server-side (Authorization Code + PKCE)
+  const handleSocialLogin = (provider) => {
+    if (provider !== "google") return;
+    loginWithGoogle();
+  };
+
+  // ── Navigation ────────────────────────────────────────────
+  const nav = (p, c) => {
+    if (c) setSelCourse(c);
+    setPage(p);
+    setMobileMenu(false);
+    setAvatarOpen(false);
+    window.scrollTo?.(0, 0);
+  };
+
+  const navWithCat = (cat) => {
+    setCatFilter(cat);
+    nav("courses");
+  };
+
+  // ── Enrollment / Payment ──────────────────────────────────
+  const handleEnroll = async (course) => {
+    if (!isLogged) { nav("login"); return; }
+    // Check enrollment via server
+    if (course.isFree || Number(course.price) === 0) {
+      await completePayment(course, "free", null);
+      return;
+    }
+    setPayModal(course);
+  };
+
+  const completePayment = async (course, method, discount) => {
+    const subtotal  = Number(course.price) || 0;
+    const discAmt   = discount
+      ? discount.type === "percent"
+        ? Math.round(subtotal * (discount.value / 100))
+        : Math.min(discount.value, subtotal)
+      : 0;
+    const afterDisc = Math.max(0, subtotal - discAmt);
+    const vat       = Math.round(afterDisc * 0.15);
+    const total     = method === "free" ? 0 : afterDisc + vat;
+
+    const { success, orderId, error } = await createPendingOrder({
+      courseId:       course.id,
+      courseName:     course.title,
+      originalAmount: subtotal,
+      discountCode:   discount?.code || null,
+      discountAmt:    discAmt,
+      amount:         total,
+      method,
+    });
+
+    if (!success) { console.error("Order creation failed:", error); return; }
+
+    setPayModal(null);
+    const { data: { session: sbSession } } = await supabase.auth.getSession();
+    const token = sbSession?.access_token;
+    const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+
+    if (method === "free") {
+      // For free courses, call the server-side enrollment endpoint
+      try {
+        const res = await fetch("/api/enroll-free", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json", ...authHeader },
+          body: JSON.stringify({ courseId: course.id, orderId }),
+        });
+        if (res.ok) { await refreshEnrollments(); nav("course-learn", course); }
+      } catch (e) {
+        console.error("Free enrollment failed:", e);
+      }
+    } else {
+      // For paid: redirect to Stripe Checkout via server-side payment intent
+      try {
+        const res = await fetch("/api/create-payment-intent", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json", ...authHeader },
+          body: JSON.stringify({ courseId: course.id, orderId }),
+        });
+        const { checkoutUrl } = await res.json();
+        if (checkoutUrl) window.location.href = checkoutUrl;
+      } catch (e) {
+        console.error("Payment intent failed:", e);
+      }
+    }
+  };
+
+  const isAuth = page === "login" || page === "signup";
+  const isAdm  = page === "admin";
+  const pub    = publishedCourses;
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:isRTL?"'Cairo',sans-serif":"'DM Sans',sans-serif",direction:isRTL?"rtl":"ltr"}} lang={lang}>
@@ -774,14 +632,14 @@ export default function App() {
               {isLogged ? (
                 <div style={{position:"relative"}}>
                   <button onClick={()=>setAvatarOpen(!avatarOpen)} style={S.avatarBtn}>
-                    <div style={S.avatarCircle}>{user.name?.[0]?.toUpperCase()||"?"}</div>
-                    <span className="d-nav" style={{fontSize:14,fontWeight:600,color:C.navy}}>{user.name?.split(" ")[0]}</span>
+                    <div style={S.avatarCircle}>{userWithEnrollments?.name?.[0]?.toUpperCase()||"?"}</div>
+                    <span className="d-nav" style={{fontSize:14,fontWeight:600,color:C.navy}}>{userWithEnrollments?.name?.split(" ")[0]}</span>
                     <I.ChevDown/>
                   </button>
                   {avatarOpen && <div style={S.avatarDrop}>
                     <div style={S.avatarHeader}>
-                      <div style={{...S.avatarCircle,width:40,height:40,fontSize:16}}>{user.name?.[0]?.toUpperCase()}</div>
-                      <div><p style={{fontSize:14,fontWeight:700,color:C.navy}}>{user.name}</p><p style={{fontSize:12,color:"#9CA3AF"}}>{user.email}</p><RoleBadge role={user.role}/></div>
+                      <div style={{...S.avatarCircle,width:40,height:40,fontSize:16}}>{userWithEnrollments?.name?.[0]?.toUpperCase()}</div>
+                      <div><p style={{fontSize:14,fontWeight:700,color:C.navy}}>{userWithEnrollments?.name}</p><p style={{fontSize:12,color:"#9CA3AF"}}>{userWithEnrollments?.email}</p><RoleBadge role={userWithEnrollments?.role}/></div>
                     </div>
                     <div style={S.avatarDiv}/>
                     <button onClick={()=>nav(isAdmin?"admin":"dashboard")} style={S.avatarItem}><I.Grid/>{isAdmin?t.nav.adminPanel:t.nav.dashboard}</button>
@@ -808,11 +666,11 @@ export default function App() {
 
       {/* ── PAGES ── */}
       <main style={{minHeight:"calc(100vh - 68px)"}}>
-        {page==="home"        && <HomePage nav={nav} navWithCat={navWithCat} courses={pub} t={t} isRTL={isRTL} user={user}/>}
+        {page==="home"        && <HomePage nav={nav} navWithCat={navWithCat} courses={pub} t={t} isRTL={isRTL} user={userWithEnrollments}/>}
         {page==="courses"     && <CoursesPage courses={pub} nav={nav} initCat={catFilter} setCatFilter={setCatFilter} t={t} isRTL={isRTL}/>}
-        {page==="course-detail" && selCourse && <CourseDetailPage course={selCourse} nav={nav} user={user} handleEnroll={handleEnroll} t={t} isRTL={isRTL}/>}
-        {page==="course-learn"  && selCourse && <CourseLearningPage course={selCourse} user={user} nav={nav} t={t} isRTL={isRTL}/>}
-        {page==="dashboard"   && <DashboardPage courses={courses} user={user} nav={nav} t={t} isRTL={isRTL}/>}
+        {page==="course-detail" && selCourse && <CourseDetailPage course={selCourse} nav={nav} user={userWithEnrollments} handleEnroll={handleEnroll} t={t} isRTL={isRTL}/>}
+        {page==="course-learn"  && selCourse && <CourseLearningPage course={selCourse} user={userWithEnrollments} nav={nav} t={t} isRTL={isRTL}/>}
+        {page==="dashboard"   && <DashboardPage courses={courses} user={userWithEnrollments} nav={nav} t={t} isRTL={isRTL}/>}
         {page==="login"       && <LoginPage nav={nav} login={login} t={t} isRTL={isRTL} onSocial={handleSocialLogin}/>}
         {page==="signup"      && <SignupPage nav={nav} signup={signup} t={t} isRTL={isRTL} onSocial={handleSocialLogin}/>}
         {page==="about"       && <AboutPage nav={nav} t={t}/>}
@@ -820,7 +678,7 @@ export default function App() {
         {page==="help"        && <HelpPage nav={nav} t={t}/>}
         {page==="privacy"     && <PrivacyPage nav={nav} t={t}/>}
         {page==="terms"       && <TermsPage nav={nav} t={t}/>}
-        {page==="admin" && isAdmin && <AdminLayout user={user} logout={logout} sec={adminSec} setSec={setAdminSec} courses={courses} orders={orders} users={users} addCourse={addCourse} updateCourse={updateCourse} deleteCourse={deleteCourse} addUserAdmin={addUserAdmin} updateUser={updateUser} deleteUser={deleteUser} nav={nav} selCourse={selCourse} setSelCourse={setSelCourse} t={t} onSiteNameChange={setSiteNameApp}/>}
+        {page==="admin" && isAdmin && <AdminLayout user={userWithEnrollments} logout={logout} sec={adminSec} setSec={setAdminSec} courses={courses} orders={orders} addCourse={addCourse} updateCourse={updateCourse} deleteCourse={deleteCourse} nav={nav} selCourse={selCourse} setSelCourse={setSelCourse} t={t} onSiteNameChange={setSiteNameApp}/>}
       </main>
 
       {/* ── PAYMENT MODAL ── */}
@@ -905,20 +763,12 @@ export default function App() {
         </footer>
       )}
 
-      {/* ── RESET PASSWORD MODAL ── */}
-      {resetToken && <ResetPasswordModal
-        userId={resetUserId}
-        token={resetToken}
+      {/* ── RESET PASSWORD MODAL (shown after Supabase recovery email redirect) ── */}
+      {showResetModal && <ResetPasswordModal
         isRTL={isRTL}
-        onDone={()=>{ setResetToken(""); setResetUserId(""); setPage("login"); }}
+        updatePassword={updatePassword}
+        onDone={()=>{ setShowResetModal(false); setPage("login"); }}
       />}
-
-      {/* ── ACTIVATION SUCCESS TOAST ── */}
-      {activationSuccess && (
-        <div style={{position:"fixed",top:80,left:"50%",transform:"translateX(-50%)",zIndex:9999,background:C.success,color:"#fff",padding:"14px 28px",borderRadius:50,fontSize:15,fontWeight:600,boxShadow:"0 4px 20px rgba(0,0,0,0.15)",display:"flex",alignItems:"center",gap:10,whiteSpace:"nowrap"}}>
-          ✅ {isRTL?"تم تفعيل حسابك بنجاح! أهلاً بك 🎉":"Account verified successfully! Welcome 🎉"}
-        </div>
-      )}
 
       {/* ── CHATBOT ── */}
       {!isAdm && ls("orb_chatbot_enabled","1")==="1" && <ChatbotWidget isRTL={isRTL}/>}
@@ -942,14 +792,14 @@ function PaymentModal({ course, onClose, onPay, t }) {
 
   const isFree = course.isFree || Number(course.price)===0;
 
-  const applyDiscount = () => {
+  const { validateDiscountCode } = useCourses();
+
+  const applyDiscount = async () => {
     setCouponErr("");
     if (!coupon.trim()) return;
-    const codes = ls("orb_discounts",[]);
-    const found  = codes.find(c=>c.code===coupon.trim().toUpperCase() && c.active);
-    if (!found)                             { setCouponErr(isRTL?"كود غير صحيح أو منتهي":"Invalid or expired code"); return; }
-    if (found.expiry && new Date(found.expiry)<new Date()) { setCouponErr(isRTL?"انتهت صلاحية الكود":"This code has expired"); return; }
-    if (found.maxUses && found.uses>=found.maxUses)        { setCouponErr(isRTL?"تم استخدام الكود بالكامل":"This code has reached its usage limit"); return; }
+    // Server-side validation — RLS only returns active, non-expired, non-exhausted codes
+    const found = await validateDiscountCode(coupon.trim());
+    if (!found) { setCouponErr(isRTL?"كود غير صحيح أو منتهي":"Invalid or expired code"); return; }
     setDiscount(found);
     setCouponErr("");
   };
@@ -966,17 +816,10 @@ function PaymentModal({ course, onClose, onPay, t }) {
   const vat        = Math.round(afterDisc*0.15);
   const total      = afterDisc + vat;
 
-  // Increment discount code usage
-  const burnCode = () => {
-    if (!discount) return;
-    const codes   = ls("orb_discounts",[]);
-    const updated = codes.map(c=>c.id===discount.id ? {...c, uses:(c.uses||0)+1} : c);
-    ss("orb_discounts", updated);
-  };
-
+  // Usage increment is handled server-side in the payment webhook (see api/verify-payment.js)
   const handlePay = (method) => {
     setStep("processing");
-    setTimeout(()=>{ burnCode(); onPay(course, method, discount); setStep("done"); }, 900);
+    setTimeout(()=>{ onPay(course, method, discount); setStep("done"); }, 900);
   };
 
   useEffect(()=>{
@@ -1406,7 +1249,21 @@ function CourseDetailPage({ course, nav, user, handleEnroll, t, isRTL }) {
 // ═══════════════════════════════════════════
 // CERTIFICATE GENERATOR
 // ═══════════════════════════════════════════
+// Encode user-supplied strings before embedding in SVG text nodes (VULN-010)
+function encodeSVGText(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;")
+    .slice(0, 200);
+}
+
 function generateCertSVG(userName, courseTitle, date) {
+  const safeName  = encodeSVGText(userName);
+  const safeCourse = encodeSVGText(courseTitle);
+  const safeDate   = encodeSVGText(date);
   return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 560">
   <rect width="800" height="560" fill="#F5F2ED"/>
   <rect x="20" y="20" width="760" height="520" rx="16" fill="none" stroke="#B8965A" stroke-width="2.5"/>
@@ -1418,11 +1275,11 @@ function generateCertSVG(userName, courseTitle, date) {
   <text x="400" y="64" text-anchor="middle" fill="#D5CFC1" font-size="9" font-family="Georgia">ORBIT</text>
   <text x="400" y="175" text-anchor="middle" fill="#9CA3AF" font-size="13" font-family="Georgia" letter-spacing="4">CERTIFICATE OF COMPLETION</text>
   <text x="400" y="225" text-anchor="middle" fill="#1A1F2E" font-size="14" font-family="Georgia">This is to certify that</text>
-  <text x="400" y="278" text-anchor="middle" fill="#2D3347" font-size="32" font-weight="700" font-family="Georgia">${userName}</text>
+  <text x="400" y="278" text-anchor="middle" fill="#2D3347" font-size="32" font-weight="700" font-family="Georgia">${safeName}</text>
   <line x1="150" y1="292" x2="650" y2="292" stroke="#B8965A" stroke-width="1.5"/>
   <text x="400" y="330" text-anchor="middle" fill="#6B7280" font-size="14" font-family="Georgia">has successfully completed the course</text>
-  <text x="400" y="378" text-anchor="middle" fill="#2D3347" font-size="22" font-weight="700" font-family="Georgia">${courseTitle}</text>
-  <text x="400" y="430" text-anchor="middle" fill="#9CA3AF" font-size="12" font-family="Georgia">Issued on ${date}</text>
+  <text x="400" y="378" text-anchor="middle" fill="#2D3347" font-size="22" font-weight="700" font-family="Georgia">${safeCourse}</text>
+  <text x="400" y="430" text-anchor="middle" fill="#9CA3AF" font-size="12" font-family="Georgia">Issued on ${safeDate}</text>
   <text x="200" y="490" text-anchor="middle" fill="#2D3347" font-size="11" font-family="Georgia">Orbit Learning Platform</text>
   <line x1="120" y1="470" x2="280" y2="470" stroke="#D5CFC1" stroke-width="1"/>
   <text x="600" y="490" text-anchor="middle" fill="#2D3347" font-size="11" font-family="Georgia">Academic Director</text>
@@ -1560,31 +1417,38 @@ function CourseLearningPage({ course, user, nav, t, isRTL }) {  const [active,  
     if (pass) markDone(active);
   };
 
-  // Issue certificate when all done
-  const handleGetCert = () => {
+  // Issue certificate when all done — stored in Supabase via server (VULN-011)
+  const handleGetCert = async () => {
     const certDate = new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
     const cert = {
-      id:          `cert-${Date.now()}`,
-      courseId:    course.id,
-      courseTitle: isRTL && course.titleAr ? course.titleAr : course.title,
+      id:            `cert-${Date.now()}`,
+      courseId:      course.id,
+      course_id:     course.id,
+      courseTitle:   isRTL && course.titleAr ? course.titleAr : course.title,
       courseTitleEn: course.title,
-      date:        certDate,
-      svg:         generateCertSVG(user.name, course.title, certDate),
+      date:          certDate,
+      svg:           generateCertSVG(user.name, course.title, certDate),
     };
-    const allUsers = JSON.parse(localStorage.getItem("orb_users")||"[]");
-    const idx = allUsers.findIndex(u=>u.id===user.id);
-    if (idx !== -1 && !allUsers[idx].certificates?.find(c=>c.courseId===course.id)) {
-      allUsers[idx].certificates = [...(allUsers[idx].certificates||[]), cert];
-      localStorage.setItem("orb_users", JSON.stringify(allUsers));
-      // Update active session
-      const updatedUser = {...user, certificates:[...(user.certificates||[]),cert]};
-      localStorage.setItem("orb_user", JSON.stringify(updatedUser));
+    // Persist to Supabase via server-side endpoint (prevents forged certificates)
+    try {
+      const { data: { session: certSession } } = await supabase.auth.getSession();
+      const certToken = certSession?.access_token;
+      await fetch("/api/issue-certificate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(certToken ? { Authorization: `Bearer ${certToken}` } : {}),
+        },
+        body: JSON.stringify({ courseId: course.id, svgData: cert.svg, courseTitle: course.title }),
+      });
+    } catch (e) {
+      console.error("Certificate save failed:", e);
     }
     setShowCert(cert);
   };
 
-  // Check if already has certificate
-  const existingCert = user?.certificates?.find(c=>c.courseId===course.id);
+  // Check if already has certificate (fetched from Supabase via getCertificates in Dashboard)
+  const existingCert = user?.certificates?.find?.(c=>c.courseId===course.id);
 
   const submitReview = () => {
     if (!rating || !comment.trim()) return;
@@ -1877,20 +1741,17 @@ function DashboardPage({ courses, user, nav, t, isRTL }) {
   const [pfSaved, setPfSaved] = useState(false);
   const [pfErr, setPfErr] = useState("");
 
-  const saveProfile = (e) => {
+  const { updateProfile } = useAuth();
+  const saveProfile = async (e) => {
     e.preventDefault(); setPfErr("");
     if (!pf.firstName.trim()||!pf.lastName.trim()) { setPfErr(isRTL?"الاسم الأول والأخير مطلوبان":"First and last name are required"); return; }
     if (!pf.phone.trim()) { setPfErr(isRTL?"رقم الجوال مطلوب":"Mobile number is required"); return; }
-    // Update user in localStorage
-    const allUsers = ls("orb_users",[]);
-    const updated = allUsers.map(u => u.id===user.id
-      ? {...u, firstName:sanitize(pf.firstName), lastName:sanitize(pf.lastName), name:`${sanitize(pf.firstName)} ${sanitize(pf.lastName)}`, phone:sanitize(pf.phone)}
-      : u
-    );
-    ss("orb_users", updated);
-    const newUser = {...user, firstName:sanitize(pf.firstName), lastName:sanitize(pf.lastName), name:`${sanitize(pf.firstName)} ${sanitize(pf.lastName)}`, phone:sanitize(pf.phone)};
-    ss("orb_user", newUser);
-    // Force page refresh to reflect new name in navbar
+    const result = await updateProfile({
+      firstName: sanitize(pf.firstName),
+      lastName:  sanitize(pf.lastName),
+      phone:     sanitize(pf.phone),
+    });
+    if (!result.success) { setPfErr(result.error || "Update failed"); return; }
     window.location.reload();
   };
 
@@ -1930,7 +1791,7 @@ function DashboardPage({ courses, user, nav, t, isRTL }) {
 
     {/* ── MY CERTIFICATES SECTION ── */}
     {(() => {
-      const certs = ls("orb_users",[]).find(u=>u.id===user?.id)?.certificates || user?.certificates || [];
+      const certs = user?.certificates || [];
       return certs.length > 0 ? (
         <div style={{marginBottom:40}}>
           <h2 style={{...S.secTitle,marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
@@ -2020,10 +1881,10 @@ function DashboardPage({ courses, user, nav, t, isRTL }) {
 // ═══════════════════════════════════════════
 // RESET PASSWORD MODAL
 // ═══════════════════════════════════════════
-function ResetPasswordModal({ userId, token, isRTL, onDone }) {
-  const [pw,  setPw]  = useState("");
-  const [pw2, setPw2] = useState("");
-  const [err, setErr] = useState("");
+function ResetPasswordModal({ isRTL, updatePassword, onDone }) {
+  const [pw,   setPw]   = useState("");
+  const [pw2,  setPw2]  = useState("");
+  const [err,  setErr]  = useState("");
   const [done, setDone] = useState(false);
 
   const rules = [
@@ -2035,17 +1896,12 @@ function ResetPasswordModal({ userId, token, isRTL, onDone }) {
   const passed = rules.filter(r=>r.test).length;
   const strengthColor = passed<=1?"#EF4444":passed===2?"#F59E0B":passed===3?"#3B82F6":C.success;
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault(); setErr("");
     if (passed < 4) { setErr(isRTL?"كلمة المرور لا تستوفي المتطلبات":"Password does not meet requirements"); return; }
     if (pw !== pw2) { setErr(isRTL?"كلمتا المرور غير متطابقتين":"Passwords do not match"); return; }
-
-    const allUsers = ls("orb_users",[]);
-    const updated  = allUsers.map(u => u.id===userId
-      ? {...u, password:pw, resetToken:"", resetExpiry:0}
-      : u
-    );
-    ss("orb_users", updated);
+    const result = await updatePassword(pw);
+    if (!result.success) { setErr(result.error || "Update failed"); return; }
     setDone(true);
     setTimeout(onDone, 2500);
   };
@@ -2166,52 +2022,26 @@ function SocialLoginBtn({ provider, label, onClick }) {
 // LOGIN PAGE
 // ═══════════════════════════════════════════
 function LoginPage({ nav, login, t, isRTL, onSocial }) {
+  const { requestPasswordReset } = useAuth();
   const [f,setF]           = useState({email:"",password:""});
   const [err,setErr]        = useState("");
   const [showForgot,  setShowForgot]  = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotSent,  setForgotSent]  = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
-  const [resetUrl, setResetUrl] = useState(""); // shown on screen as fallback
 
   const handleForgot = async (e) => {
     e.preventDefault();
     setForgotLoading(true);
-    const allUsers = ls("orb_users",[]);
-    const found    = allUsers.find(u=>u.email===forgotEmail.toLowerCase().trim());
-
-    // Generate reset token (even if not found — same message for security)
-    const token   = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    const resetLink = `${window.location.origin}/?reset=${token}`;
-
-    if (found) {
-      // Save reset token with 1-hour expiry
-      const updated = allUsers.map(u=>u.email===found.email
-        ? {...u, resetToken:token, resetExpiry: Date.now() + 3600000 }
-        : u
-      );
-      ss("orb_users", updated);
-
-      // Send reset email
-      await sendEmail("reset_password", {
-        to_name:    found.firstName || found.name?.split(" ")[0] || "User",
-        to_email:   found.email,
-        reset_url:  resetLink,
-        platform:   ls("orb_siteName","Orbit Learning"),
-        subject:    `Reset your ${ls("orb_siteName","Orbit Learning")} password`,
-        message:    `Hi ${found.firstName||found.name?.split(" ")[0]},\n\nClick the link below to reset your password. This link expires in 1 hour.\n\n${resetLink}\n\nIf you didn't request this, ignore this email.\n\n— The ${ls("orb_siteName","Orbit Learning")} Team`,
-      });
-
-      setResetUrl(resetLink); // fallback shown on screen
-    }
-
+    // Supabase sends the reset email; always show the same message to prevent user enumeration
+    await requestPasswordReset(forgotEmail.toLowerCase().trim());
     setForgotLoading(false);
-    setForgotSent(true); // always show same screen
+    setForgotSent(true);
   };
 
-  const go = e => {
+  const go = async (e) => {
     e.preventDefault(); setErr("");
-    const result = login(f.email, f.password);
+    const result = await login(f.email, f.password);
     if (!result.ok) setErr(result.msg || (isRTL?"بريد إلكتروني أو كلمة مرور غير صحيحة":"Invalid email or password"));
   };
   return (
@@ -2273,23 +2103,10 @@ function LoginPage({ nav, login, t, isRTL, onSocial }) {
                       : "If this email is registered with us, you'll receive a password reset link. The link is valid for 1 hour."}
                   </p>
 
-                  {/* On-screen fallback link */}
-                  {resetUrl && (
-                    <div style={{background:C.bg,border:`1.5px solid ${C.gold}40`,borderRadius:12,padding:"16px 20px",marginBottom:20}}>
-                      <p style={{fontSize:12,color:"#9CA3AF",marginBottom:10}}>
-                        {isRTL?"أو استخدم الرابط أدناه مباشرةً:":"Or use this link directly:"}
-                      </p>
-                      <a href={resetUrl}
-                        style={{display:"block",padding:"11px 20px",background:C.gold,color:"#fff",borderRadius:9,fontSize:14,fontWeight:700,textDecoration:"none"}}>
-                        🔑 {isRTL?"إعادة تعيين كلمة المرور":"Reset My Password"}
-                      </a>
-                    </div>
-                  )}
-
                   <p style={{fontSize:12,color:"#9CA3AF",marginBottom:20}}>
                     {isRTL?"لم تستلم الرسالة؟ تحقق من مجلد البريد المزعج.":"Didn't get it? Check your spam folder."}
                   </p>
-                  <button onClick={()=>{ setShowForgot(false); setForgotSent(false); setResetUrl(""); }}
+                  <button onClick={()=>{ setShowForgot(false); setForgotSent(false); }}
                     style={{...S.btnPrimary,margin:"0 auto",padding:"12px 32px",fontSize:15}}>
                     {isRTL?"العودة لتسجيل الدخول":"Back to Sign In"}
                   </button>
@@ -2330,7 +2147,6 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
   const [err,setErr]  = useState("");
   const [loading,setLoading]        = useState(false);
   const [done, setDone]             = useState(false);
-  const [activationUrl, setActUrl]  = useState("");
   const [errIsLogin, setErrIsLogin] = useState(false);
 
   const go = async (e) => {
@@ -2345,17 +2161,17 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
     const result = await signup(f);
     setLoading(false);
     if (!result.ok) {
-      if (result.msg === "email_exists") {
+      const isExisting = result.msg?.toLowerCase().includes("already");
+      if (isExisting) {
         setErr(isRTL
           ? "يبدو أن هذا البريد الإلكتروني مسجّل بالفعل. هل تريد تسجيل الدخول؟"
           : "This email is already registered. Want to sign in instead?");
         setErrIsLogin(true);
       } else {
-        setErr(isRTL?"حدث خطأ، يرجى المحاولة لاحقاً":"An error occurred, please try again");
+        setErr(result.msg || (isRTL?"حدث خطأ، يرجى المحاولة لاحقاً":"An error occurred, please try again"));
         setErrIsLogin(false);
       }
     } else {
-      setActUrl(result.activationUrl||"");
       setDone(true);
     }
   };
@@ -2391,18 +2207,6 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
           {isRTL?"لم تستلم الرسالة؟ تحقق من مجلد البريد المزعج (Spam).":"Didn't receive it? Check your spam/junk folder."}
         </p>
 
-        {/* FALLBACK: show link directly if EmailJS not set up */}
-        {activationUrl && (
-          <div style={{background:C.bg,border:`1.5px solid ${C.gold}40`,borderRadius:12,padding:"16px 20px",marginBottom:20,textAlign:"left"}}>
-            <p style={{fontSize:12,fontWeight:700,color:"#9CA3AF",marginBottom:8,textAlign:"center"}}>
-              {isRTL?"أو انقر على الرابط أدناه مباشرةً:":"Or click the link below directly:"}
-            </p>
-            <a href={activationUrl}
-              style={{display:"block",padding:"12px 20px",background:C.gold,color:"#fff",borderRadius:10,fontSize:14,fontWeight:700,textAlign:"center",textDecoration:"none",wordBreak:"break-all"}}>
-              ✅ {isRTL?"تفعيل حسابي الآن":"Activate My Account Now"}
-            </a>
-          </div>
-        )}
 
         <button onClick={()=>nav("login")} style={{...S.btnPrimary,margin:"0 auto",padding:"12px 32px",fontSize:15}}>
           {isRTL?"العودة لتسجيل الدخول":"Back to Sign In"}
@@ -2903,7 +2707,7 @@ function TermsPage({ nav, t }) {
 // ═══════════════════════════════════════════
 // ADMIN LAYOUT
 // ═══════════════════════════════════════════
-function AdminLayout({ user, logout, sec, setSec, courses, orders, users, addCourse, updateCourse, deleteCourse, addUserAdmin, updateUser, deleteUser, nav, selCourse, setSelCourse, onSiteNameChange }) {
+function AdminLayout({ user, logout, sec, setSec, courses, orders, addCourse, updateCourse, deleteCourse, nav, selCourse, setSelCourse, onSiteNameChange }) {
   const menuItems = [
     {id:"overview",  icon:<I.Grid/>,    l:"Overview"},
     {id:"courses",   icon:<I.Book/>,    l:"Courses"},
@@ -2929,10 +2733,10 @@ function AdminLayout({ user, logout, sec, setSec, courses, orders, users, addCou
       </div>
     </aside>
     <main style={{flex:1,background:C.bg,overflow:"auto",minWidth:0}}>
-      {sec==="overview"    && <AdminOverview courses={courses} orders={orders} users={users} nav={nav}/>}
+      {sec==="overview"    && <AdminOverview courses={courses} orders={orders} nav={nav}/>}
       {sec==="courses"     && <AdminCourses courses={courses} updateCourse={updateCourse} deleteCourse={deleteCourse} setSec={setSec} setSelCourse={setSelCourse}/>}
       {sec==="course-form" && <AdminCourseForm course={selCourse} addCourse={addCourse} updateCourse={updateCourse} setSec={setSec} setSelCourse={setSelCourse}/>}
-      {sec==="users"       && <AdminUsers users={users} addUserAdmin={addUserAdmin} updateUser={updateUser} deleteUser={deleteUser}/>}
+      {sec==="users"       && <AdminUsers/>}
       {sec==="careers"     && <AdminCareers/>}
       {sec==="discounts"   && <AdminDiscounts/>}
       {sec==="revenue"     && <AdminRevenue orders={orders}/>}
@@ -2977,7 +2781,10 @@ function RevenueChart({ data2026, data2025, labels }) {
 // ═══════════════════════════════════════════
 // ADMIN OVERVIEW — configurable year comparison
 // ═══════════════════════════════════════════
-function AdminOverview({ courses, orders, users, nav }) {
+function AdminOverview({ courses, orders, nav }) {
+  const { getUsers } = useCourses();
+  const [userCount, setUserCount] = useState("…");
+  useEffect(() => { getUsers().then(u => setUserCount(u.length)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [yearA,   setYearA]   = useState("2026");
   const [yearB,   setYearB]   = useState("2025");
   const [monthsA, setMonthsA] = useState([]); // [] = All months
@@ -3049,7 +2856,7 @@ function AdminOverview({ courses, orders, users, nav }) {
       {[
         {icon:<I.Dollar/>, l:"Total Revenue", v:<Price value={rev} size={24} bold={800} color={C.navy}/>, col:C.gold, t:"+12%"},
         {icon:<I.Book/>,   l:"Total Courses", v:courses.length, col:C.teal, t:`${pub} published`},
-        {icon:<I.Users/>,  l:"Students",      v:users.length,   col:C.navy, t:"registered"},
+        {icon:<I.Users/>,  l:"Students",      v:userCount,      col:C.navy, t:"registered"},
         {icon:<I.Chart/>,  l:"Orders",        v:orders.length,  col:C.plum, t:orders.length?<Price value={Math.round(rev/orders.length)} size={12} bold={600} color={C.teal}/>:"—"},
       ].map((s,i)=>(
         <div key={i} style={S.adminStat}>
@@ -3117,32 +2924,10 @@ function AdminCourses({ courses, updateCourse, deleteCourse, setSec, setSelCours
   const [delId,      setDelId]      = useState(null);
   const [progCourse, setProgCourse] = useState(null); // course to view progress
 
-  // Get all users who enrolled in a specific course + their progress
-  const getCourseProgress = (courseId) => {
-    const allUsers = ls("orb_users",[]);
-    return allUsers
-      .filter(u=>u.enrolledCourses?.includes(courseId))
-      .map(u=>{
-        let prog = {};
-        try { prog = JSON.parse(localStorage.getItem(`orb_prog_${u.id}_${courseId}`))||{}; } catch {}
-        const total  = courses.find(c=>c.id===courseId)?.modules?.length || 0;
-        const done   = Object.values(prog).filter(Boolean).length;
-        const pct    = total>0 ? Math.round((done/total)*100) : 0;
-        return { id:u.id, name:u.name, email:u.email, done, total, pct, hasCert:!!(u.certificates?.find(c=>c.courseId===courseId)) };
-      });
-  };
-
-  // Remove a student from a course
-  const unenrollUser = (userId, courseId) => {
-    const allUsers = ls("orb_users",[]);
-    const updated  = allUsers.map(u=> u.id===userId
-      ? {...u, enrolledCourses:(u.enrolledCourses||[]).filter(id=>id!==courseId)}
-      : u
-    );
-    ss("orb_users",updated);
-    // Refresh progress view
-    setProgCourse(c=>({...c, _refresh:Date.now()}));
-  };
+  // Course progress is now tracked server-side in module_completions table.
+  // These are stub functions until the admin progress view is migrated to Supabase.
+  const getCourseProgress = () => [];
+  const unenrollUser = () => {};
 
   return <div style={{padding:40}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:32,flexWrap:"wrap",gap:16}}>
@@ -3658,41 +3443,36 @@ function AdminCourseForm({ course, addCourse, updateCourse, setSec, setSelCourse
 // ═══════════════════════════════════════════
 // ADMIN USERS — with role management
 // ═══════════════════════════════════════════
-function AdminUsers({ users, addUserAdmin, updateUser, deleteUser }) {
-  const [showForm, setShowForm] = useState(false);
-  const [editUser, setEditUser] = useState(null);
-  const [form,     setForm]     = useState({firstName:"",lastName:"",email:"",password:"",role:"student"});
-  const [err,      setErr]      = useState("");
-  const [delId,    setDelId]    = useState(null);
-  const [filter,   setFilter]   = useState("all"); // all | active | pending
-  const [search,   setSearch]   = useState("");
+function AdminUsers() {
+  const { getUsers, updateUserAdmin, deleteUserAdmin } = useCourses();
+  const [showForm,    setShowForm]    = useState(false);
+  const [editUser,    setEditUser]    = useState(null);
+  const [form,        setForm]        = useState({firstName:"",lastName:"",email:"",role:"student"});
+  const [err,         setErr]         = useState("");
+  const [delId,       setDelId]       = useState(null);
+  const [filter,      setFilter]      = useState("all");
+  const [search,      setSearch]      = useState("");
+  const [localUsers,  setLocalUsers]  = useState([]);
 
-  // Reload fresh so verified changes reflect immediately
-  const [localUsers, setLocalUsers] = useState(()=>ls("orb_users",[]));
-  const reload = () => setLocalUsers(ls("orb_users",[]));
-  useEffect(()=>{ reload(); },[users]);
+  const reload = async () => { const u = await getUsers(); setLocalUsers(u); };
+  useEffect(() => { reload(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const activateUser = (id) => {
-    const updated = localUsers.map(u => u.id===id ? {...u, verified:true, token:""} : u);
-    ss("orb_users", updated);
-    setLocalUsers(updated);
-    // Also update main users state
-    updateUser(id, {verified:true, token:""});
-  };
+  // Supabase handles email confirmation; no client-side token activation needed
+  const activateUser = () => {}; // no-op (shown only if verified===false from Supabase)
 
-  const openNew  = () => { setForm({firstName:"",lastName:"",email:"",password:"",role:"student"}); setEditUser(null); setErr(""); setShowForm(true); };
-  const openEdit = u => { setEditUser(u); setForm({firstName:u.firstName||u.name?.split(" ")[0]||"",lastName:u.lastName||u.name?.split(" ").slice(1).join(" ")||"",email:u.email,password:"",role:u.role||"student"}); setErr(""); setShowForm(true); };
+  const openNew  = () => { setForm({firstName:"",lastName:"",email:"",role:"student"}); setEditUser(null); setErr(""); setShowForm(true); };
+  const openEdit = u => { setEditUser(u); setForm({firstName:u.firstName||"",lastName:u.lastName||"",email:u.email,role:u.role||"student"}); setErr(""); setShowForm(true); };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault(); setErr("");
     if (editUser) {
-      updateUser(editUser.id,{...form,name:`${form.firstName} ${form.lastName}`,password:form.password||editUser.password});
-      setShowForm(false); reload();
+      const ok = await updateUserAdmin(editUser.id, { firstName: form.firstName, lastName: form.lastName, role: form.role });
+      if (!ok) { setErr("Update failed"); return; }
     } else {
-      const ok = addUserAdmin({...form,name:`${form.firstName} ${form.lastName}`,verified:true});
-      if (!ok) { setErr("Email already exists"); return; }
-      setShowForm(false); reload();
+      setErr("New users must sign up via the registration flow. Admin can change roles here.");
+      return;
     }
+    setShowForm(false); await reload();
   };
 
   // Filter users
@@ -3848,7 +3628,7 @@ function AdminUsers({ users, addUserAdmin, updateUser, deleteUser }) {
       <p style={{color:"#6B7280",padding:"0 28px 24px"}}>This will permanently remove the user and all their data.</p>
       <div style={{display:"flex",gap:12,padding:"0 28px 28px"}}>
         <button onClick={()=>setDelId(null)} style={{flex:1,padding:12,background:"#E8E4DD",borderRadius:10,fontWeight:600}}>Cancel</button>
-        <button onClick={()=>{deleteUser(delId);setDelId(null);reload();}} style={{flex:1,padding:12,background:C.danger,color:"#fff",borderRadius:10,fontWeight:600}}>Delete</button>
+        <button onClick={async ()=>{await deleteUserAdmin(delId);setDelId(null);await reload();}} style={{flex:1,padding:12,background:C.danger,color:"#fff",borderRadius:10,fontWeight:600}}>Delete</button>
       </div>
     </div></div>}
   </div>;
@@ -4026,42 +3806,42 @@ function AdminCareers() {
 // ADMIN DISCOUNTS — create & manage coupon codes
 // ═══════════════════════════════════════════
 function AdminDiscounts() {
-  const [codes,    setCodes]   = useState(()=>ls("orb_discounts",[]));
+  const { getDiscountCodes, saveDiscountCode, deleteDiscountCode, toggleDiscountCode } = useCourses();
+  const [codes,    setCodes]   = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editCode, setEditCode] = useState(null);
   const [form,     setForm]    = useState({code:"",type:"percent",value:"",maxUses:"",expiry:"",active:true,description:""});
   const [err,      setErr]     = useState("");
 
-  const saveCodes = v => { setCodes(v); ss("orb_discounts",v); };
+  const reload = async () => { const c = await getDiscountCodes(); setCodes(c || []); };
+  useEffect(() => { reload(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openNew  = () => { setForm({code:"",type:"percent",value:"",maxUses:"",expiry:"",active:true,description:""}); setEditCode(null); setErr(""); setShowForm(true); };
-  const openEdit = c => { setForm({...c}); setEditCode(c); setErr(""); setShowForm(true); };
+  const openEdit = c => { setForm({...c, maxUses: c.max_uses||"", expiry: c.expiry ? c.expiry.slice(0,10) : ""}); setEditCode(c); setErr(""); setShowForm(true); };
 
   const genCode = () => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    const code = Array.from({length:8},()=>chars[Math.floor(Math.random()*chars.length)]).join("");
+    const arr = new Uint8Array(8);
+    crypto.getRandomValues(arr);
+    const code = Array.from(arr, b => chars[b % chars.length]).join("");
     setForm(p=>({...p,code}));
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault(); setErr("");
     if (!form.code.trim()) { setErr("Code is required"); return; }
     if (!form.value || Number(form.value)<=0) { setErr("Discount value must be greater than 0"); return; }
     if (form.type==="percent" && Number(form.value)>100) { setErr("Percentage cannot exceed 100%"); return; }
-    const code = form.code.trim().toUpperCase();
-    // Check duplicate
-    if (!editCode && codes.find(c=>c.code===code)) { setErr("This code already exists"); return; }
-    const entry = {...form, code, value:Number(form.value), maxUses:form.maxUses?Number(form.maxUses):null, uses:editCode?.uses||0, id:editCode?.id||`dc-${Date.now()}` };
-    if (editCode) saveCodes(codes.map(c=>c.id===editCode.id?entry:c));
-    else saveCodes([...codes,entry]);
-    setShowForm(false); setEditCode(null);
+    const ok = await saveDiscountCode(form, editCode?.id || null);
+    if (!ok) { setErr("Save failed — code may already exist"); return; }
+    setShowForm(false); setEditCode(null); await reload();
   };
 
-  const toggleActive = id => saveCodes(codes.map(c=>c.id===id?{...c,active:!c.active}:c));
-  const deleteCode   = id => saveCodes(codes.filter(c=>c.id!==id));
+  const toggleActive = async (id, current) => { await toggleDiscountCode(id, !current); await reload(); };
+  const deleteCode   = async (id) => { await deleteDiscountCode(id); await reload(); };
 
   const isExpired = c => c.expiry && new Date(c.expiry) < new Date();
-  const isMaxed   = c => c.maxUses && c.uses >= c.maxUses;
+  const isMaxed   = c => c.max_uses && c.uses >= c.max_uses;
 
   return (
     <div style={{padding:40}}>
@@ -4099,13 +3879,13 @@ function AdminDiscounts() {
                     {alive      && <span style={{fontSize:11,padding:"2px 8px",background:C.successBg,color:C.success,borderRadius:20,fontWeight:600}}>✓ Active</span>}
                   </div>
                   <div style={{display:"flex",gap:12,fontSize:12,color:"#9CA3AF",flexWrap:"wrap"}}>
-                    <span>Used: {c.uses||0}{c.maxUses?` / ${c.maxUses}`:""} times</span>
+                    <span>Used: {c.uses||0}{c.max_uses?` / ${c.max_uses}`:""} times</span>
                     {c.expiry && <span>Expires: {new Date(c.expiry).toLocaleDateString()}</span>}
                   </div>
                 </div>
                 {/* ACTIONS */}
                 <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                  <button onClick={()=>toggleActive(c.id)} style={{padding:"7px 14px",background:c.active?"#F3F4F6":C.successBg,color:c.active?"#6B7280":C.success,borderRadius:7,fontSize:12,fontWeight:600}}>
+                  <button onClick={()=>toggleActive(c.id, c.active)} style={{padding:"7px 14px",background:c.active?"#F3F4F6":C.successBg,color:c.active?"#6B7280":C.success,borderRadius:7,fontSize:12,fontWeight:600}}>
                     {c.active?"Disable":"Enable"}
                   </button>
                   <button onClick={()=>openEdit(c)} style={{padding:"7px 14px",background:C.gold,color:"#fff",borderRadius:7,fontSize:12,fontWeight:600}}>Edit</button>
@@ -4615,12 +4395,13 @@ function ChatbotWidget({ isRTL }) {
     "help":     "__AGENT__",
   };
 
-  // WhatsApp handoff card
+  // WhatsApp handoff card — sanitize context before embedding in URL
   const showWhatsAppCard = (context) => {
+    const safeContext = sanitize(String(context || "")).slice(0, 200);
     const waMsg = encodeURIComponent(
       isRTL
-        ? `مرحباً، أحتاج مساعدة${context ? ` بخصوص: ${context}` : ""}`
-        : `Hi, I need help${context ? ` with: ${context}` : ""} from the Orbit Learning chatbot`
+        ? `مرحباً، أحتاج مساعدة${safeContext ? ` بخصوص: ${safeContext}` : ""}`
+        : `Hi, I need help${safeContext ? ` with: ${safeContext}` : ""} from the Orbit Learning chatbot`
     );
     return { from:"bot", type:"whatsapp", url:`${WA_URL}&text=${waMsg}` };
   };
