@@ -2172,7 +2172,7 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
         setErrIsLogin(false);
       }
     } else {
-      setDone(true);
+      nav("login");
     }
   };
 

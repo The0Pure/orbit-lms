@@ -74,22 +74,19 @@ export function AuthProvider({ children }) {
 
   // ── Sign up ─────────────────────────────────────────────
   const signup = async ({ firstName, lastName, email, password }) => {
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: { first_name: firstName, last_name: lastName, provider: 'email' },
-        emailRedirectTo: `${window.location.origin}/`,
       },
     });
 
     if (error) return { success: false, error: error.message };
 
-    // Supabase sends a confirmation email; user is not yet confirmed.
-    // Return early — UI should show "check your inbox" message.
     return {
       success: true,
-      emailConfirmationRequired: !data.session,
+      emailConfirmationRequired: false,
       role: 'student',
     };
   };
