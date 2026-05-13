@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [profile,          setProfile]          = useState(null);
   const [loading,          setLoading]          = useState(true);
   const [enrolledCourseIds, setEnrolledCourseIds] = useState([]);
+  const [isRecovering,     setIsRecovering]     = useState(false);
 
   // Build a merged user object the rest of the app can consume
   const buildUser = useCallback((supabaseUser, prof) => {
@@ -51,6 +52,13 @@ export function AuthProvider({ children }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Supabase fires PASSWORD_RECOVERY when the user arrives via a reset link.
+      // detectSessionInUrl clears the hash before React mounts, so we must
+      // detect recovery here rather than from the URL.
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecovering(true);
+      }
+
       if (session?.user) {
         const prof = await fetchProfile(session.user.id);
         setProfile(prof);
@@ -65,6 +73,7 @@ export function AuthProvider({ children }) {
         setProfile(null);
         setUser(null);
         setEnrolledCourseIds([]);
+        setIsRecovering(false);
       }
       if (event === 'INITIAL_SESSION') setLoading(false);
     });
@@ -125,7 +134,7 @@ export function AuthProvider({ children }) {
   // ── Password reset (sends Supabase email, no client-side token) ──
   const requestPasswordReset = async (email) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/?reset=1`,
+      redirectTo: `${window.location.origin}/`,
     });
     if (error) return { success: false, error: error.message };
     return { success: true };
@@ -134,6 +143,7 @@ export function AuthProvider({ children }) {
   const updatePassword = async (newPassword) => {
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) return { success: false, error: error.message };
+    setIsRecovering(false);
     return { success: true };
   };
 
@@ -221,6 +231,7 @@ export function AuthProvider({ children }) {
       enrolledCourseIds,
       isAdmin:   user?.role === 'admin',
       isLoggedIn: !!user,
+      isRecovering,
       signup,
       login,
       loginWithGoogle,

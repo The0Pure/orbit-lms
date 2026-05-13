@@ -370,7 +370,7 @@ export default function App() {
   const {
     user, isAdmin, isLoggedIn: isLogged, loading: authLoading,
     login: authLogin, signup: authSignup, logout: authLogout, loginWithGoogle,
-    updatePassword, enrolledCourseIds, refreshEnrollments,
+    updatePassword, enrolledCourseIds, refreshEnrollments, isRecovering,
   } = useAuth();
 
   // Attach enrolledCourseIds to user so existing components work unchanged
@@ -398,11 +398,19 @@ export default function App() {
     if (isLogged && !isAdmin && page === "login") setPage("dashboard");
   }, [authLoading, isLogged, isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Show reset modal when Supabase fires PASSWORD_RECOVERY ──
+  // Supabase JS v2 (detectSessionInUrl) clears the URL hash before React
+  // mounts, so URL-hash detection is unreliable. The authoritative signal
+  // is the PASSWORD_RECOVERY event exposed via isRecovering in AuthContext.
+  useEffect(() => {
+    if (isRecovering) setShowResetModal(true);
+  }, [isRecovering]);
+
   // ── Handle Supabase auth redirects ───────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const hash   = new URLSearchParams(window.location.hash.slice(1));
-    // Supabase password recovery redirect
+    // Fallback: catch recovery when hash hasn't been cleared yet
     if (params.get("type") === "recovery" || hash.get("type") === "recovery") {
       window.history.replaceState({}, "", window.location.pathname);
       setShowResetModal(true);
