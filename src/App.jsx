@@ -4,9 +4,9 @@ import { useAuth } from "./context/AuthContext";
 import { useCourses } from "./context/CourseContext";
 import { supabase } from "./lib/supabase";
 
-const EMAILJS_SERVICE  = "service_w0va7df";
-const EMAILJS_CONTACT  = "template_4zwe9du";
-const EMAILJS_ORDER    = "template_nxq3hzk";
+const EMAILJS_SERVICE    = "service_w0va7df";
+const EMAILJS_HR         = "template_4zwe9du";   // Contact Us → HR / career applications
+const EMAILJS_ACTIVATION = "template_nxq3hzk";  // Order Confirmation → account activation
 
 // ═══════════════════════════════════════════
 // BRAND COLORS
@@ -318,18 +318,16 @@ const RoleBadge = ({ role }) => {
 async function sendEmail(type, params) {
   const platform = params.platform || ls("orb_siteName","Orbit Learning");
   try {
-    if (type === "order_confirmation") {
-      await emailjs.send(EMAILJS_SERVICE, EMAILJS_ORDER, {
-        to_name:     params.to_name,
-        to_email:    params.to_email,
-        course_name: params.course_name,
-        amount:      params.amount,
-        order_id:    params.order_id,
+    if (type === "activation") {
+      // Account activation email — uses Order Confirmation template
+      await emailjs.send(EMAILJS_SERVICE, EMAILJS_ACTIVATION, {
+        to_name:  params.to_name,
+        to_email: params.to_email,
         platform,
       });
     } else {
-      // contact, career_applicant, career_admin, activation — all use contact template
-      await emailjs.send(EMAILJS_SERVICE, EMAILJS_CONTACT, {
+      // contact, career_applicant, career_admin — all use HR/Contact template
+      await emailjs.send(EMAILJS_SERVICE, EMAILJS_HR, {
         to_name:   params.to_name,
         to_email:  params.to_email,
         from_name: params.from_name  || platform,
@@ -438,7 +436,12 @@ export default function App() {
       password:  fd.password,
     });
     if (!result.success) return { ok: false, msg: result.error };
-    return { ok: true, emailConfirmationRequired: result.emailConfirmationRequired };
+    // Send activation welcome email via EmailJS
+    sendEmail("activation", {
+      to_name:  `${sanitize(fd.firstName)} ${sanitize(fd.lastName)}`.trim(),
+      to_email: sanitize(fd.email).toLowerCase(),
+    });
+    return { ok: true, emailConfirmationRequired: false };
   };
 
   const logout = async () => {
