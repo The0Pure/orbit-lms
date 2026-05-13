@@ -438,8 +438,10 @@ export default function App() {
     if (!result.success) return { ok: false, msg: result.error };
     // Send activation welcome email via EmailJS
     sendEmail("activation", {
-      to_name:  `${sanitize(fd.firstName)} ${sanitize(fd.lastName)}`.trim(),
-      to_email: sanitize(fd.email).toLowerCase(),
+      to_name:      `${sanitize(fd.firstName)} ${sanitize(fd.lastName)}`.trim(),
+      to_email:     sanitize(fd.email).toLowerCase(),
+      activate_url: `${window.location.origin}`,
+      platform:     ls("orb_siteName", "Orbit Learning"),
     });
     return { ok: true, emailConfirmationRequired: false };
   };
