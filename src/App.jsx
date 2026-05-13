@@ -1,7 +1,12 @@
 import { useState, useEffect, useRef } from "react";
+import emailjs from "@emailjs/browser";
 import { useAuth } from "./context/AuthContext";
 import { useCourses } from "./context/CourseContext";
 import { supabase } from "./lib/supabase";
+
+const EMAILJS_SERVICE    = "service_w0va7df";
+const EMAILJS_HR         = "template_4zwe9du";   // Contact Us → HR / career applications
+const EMAILJS_ACTIVATION = "template_nxq3hzk";  // Order Confirmation → account activation
 
 // ═══════════════════════════════════════════
 // BRAND COLORS
@@ -308,117 +313,38 @@ const RoleBadge = ({ role }) => {
 // Supports: "activation" | "career_applicant" | "career_admin"
 // ═══════════════════════════════════════════
 // ═══════════════════════════════════════════
-// EMAIL UTILITY — Brevo (formerly Sendinblue)
-// 300 free emails/day, no template system needed
-// Just needs API Key + sender email in Admin Settings
+// EMAIL UTILITY — EmailJS
 // ═══════════════════════════════════════════
 async function sendEmail(type, params) {
-  const cfg = ls("orb_email_cfg", { provider:"brevo", apiKey:"", senderEmail:"", senderName:"Orbit Learning" });
-
-  if (!cfg.apiKey || !cfg.senderEmail) {
-    console.warn(`[Orbit Email] Not configured. Type="${type}" to="${params.to_email}"`);
-    return false;
-  }
-
-  // Build email HTML based on type
   const platform = params.platform || ls("orb_siteName","Orbit Learning");
-  const accent   = "#B8965A";
-  const navy     = "#2D3347";
-
-  const htmlBody = (title, body, btnText, btnUrl) => `
-    <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:560px;margin:0 auto;background:#F5F2ED;padding:32px 16px">
-      <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 16px rgba(45,51,71,0.08)">
-        <div style="background:${navy};padding:28px 32px;text-align:center">
-          <h1 style="color:#D5CFC1;font-size:22px;font-weight:700;margin:0;letter-spacing:-0.5px">${platform}</h1>
-        </div>
-        <div style="padding:32px">
-          <h2 style="color:${navy};font-size:20px;font-weight:700;margin:0 0 16px">${title}</h2>
-          <div style="color:#4A5568;font-size:15px;line-height:1.8">${body}</div>
-          ${btnText && btnUrl ? `
-          <div style="text-align:center;margin:28px 0">
-            <a href="${btnUrl}" style="display:inline-block;padding:14px 36px;background:${accent};color:#fff;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none">${btnText}</a>
-          </div>` : ""}
-        </div>
-        <div style="background:#F5F2ED;padding:16px 32px;text-align:center;font-size:12px;color:#9CA3AF">
-          © ${new Date().getFullYear()} ${platform}. All rights reserved.
-        </div>
-      </div>
-    </div>`;
-
-  let subject, html;
-
-  if (type === "activation") {
-    subject = `Activate your ${platform} account`;
-    html = htmlBody(
-      `Welcome to ${platform}! 🎓`,
-      `<p>Hi <strong>${params.to_name}</strong>,</p>
-       <p>Thank you for signing up. Click the button below to activate your account and start learning.</p>
-       <p style="color:#9CA3AF;font-size:13px">This link expires in 24 hours.</p>`,
-      "✅ Activate My Account",
-      params.activate_url
-    );
-  } else if (type === "reset_password") {
-    subject = `Reset your ${platform} password`;
-    html = htmlBody(
-      "Password Reset Request 🔑",
-      `<p>Hi <strong>${params.to_name}</strong>,</p>
-       <p>We received a request to reset your password. Click the button below to create a new password.</p>
-       <p style="color:#9CA3AF;font-size:13px">This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>`,
-      "🔑 Reset My Password",
-      params.reset_url
-    );
-  } else if (type === "career_applicant") {
-    subject = `Application Received – ${params.job_title} at ${platform}`;
-    html = htmlBody(
-      "Application Received ✓",
-      `<p>Hi <strong>${params.to_name}</strong>,</p>
-       <p>Thank you for applying to <strong>${params.job_title}</strong> at ${platform}.</p>
-       <p>We've received your application and will review it carefully. We'll reach out if your profile is a match.</p>
-       <p>Best regards,<br>The ${platform} Team</p>`,
-      null, null
-    );
-  } else if (type === "career_admin") {
-    subject = `New Application: ${params.applicant} → ${params.job_title}`;
-    html = htmlBody(
-      `New Job Application 📋`,
-      `<p><strong>Position:</strong> ${params.job_title}</p>
-       <p><strong>Applicant:</strong> ${params.applicant}</p>
-       <p><strong>Email:</strong> ${params.app_email}</p>
-       <p><strong>Phone:</strong> ${params.app_phone||"—"}</p>
-       <hr style="border:none;border-top:1px solid #E8E4DD;margin:16px 0"/>
-       <p><strong>Cover Letter:</strong><br>${(params.cover||"(none)").replace(/\n/g,"<br>")}</p>
-       <p><strong>CV:</strong> ${params.cv_name||"Not uploaded"}</p>`,
-      "View in Admin Panel",
-      params.admin_url || `${window.location.origin}`
-    );
-  } else {
-    subject = params.subject || `Message from ${platform}`;
-    html = htmlBody(subject, `<p>${(params.message||"").replace(/\n/g,"<br>")}</p>`, null, null);
-  }
-
   try {
-    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method:  "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "api-key":      cfg.apiKey,
-      },
-      body: JSON.stringify({
-        sender:  { name: cfg.senderName||platform, email: cfg.senderEmail },
-        to:      [{ email: params.to_email, name: params.to_name||params.to_email }],
-        subject,
-        htmlContent: html,
-      }),
-    });
-    if (res.ok || res.status===201) {
-      console.info(`[Orbit Email] ✓ Sent "${type}" to ${params.to_email}`);
-      return true;
+    if (type === "activation") {
+      // Account activation email — uses Order Confirmation template
+      await emailjs.send(EMAILJS_SERVICE, EMAILJS_ACTIVATION, {
+        to_name:  params.to_name,
+        to_email: params.to_email,
+        platform,
+      });
+    } else {
+      // contact, career_applicant, career_admin — all use HR/Contact template
+      await emailjs.send(EMAILJS_SERVICE, EMAILJS_HR, {
+        to_name:   params.to_name,
+        to_email:  params.to_email,
+        from_name: params.from_name  || platform,
+        from_email:params.from_email || "noreply@orbitlearning.com",
+        subject:   params.subject    || `Message from ${platform}`,
+        message:   params.message    || "",
+        job_title: params.job_title  || "",
+        applicant: params.applicant  || "",
+        app_email: params.app_email  || "",
+        app_phone: params.app_phone  || "",
+        platform,
+      });
     }
-    const txt = await res.text();
-    console.error(`[Orbit Email] ✗ Failed "${type}": ${res.status} — ${txt}`);
-    return false;
+    console.info(`[Orbit Email] ✓ Sent "${type}" to ${params.to_email}`);
+    return true;
   } catch(e) {
-    console.error(`[Orbit Email] ✗ Network error:`, e);
+    console.error(`[Orbit Email] ✗ Failed "${type}":`, e);
     return false;
   }
 }
@@ -444,7 +370,7 @@ export default function App() {
   const {
     user, isAdmin, isLoggedIn: isLogged, loading: authLoading,
     login: authLogin, signup: authSignup, logout: authLogout, loginWithGoogle,
-    updatePassword, enrolledCourseIds, refreshEnrollments,
+    updatePassword, enrolledCourseIds, refreshEnrollments, isRecovering,
   } = useAuth();
 
   // Attach enrolledCourseIds to user so existing components work unchanged
@@ -472,11 +398,19 @@ export default function App() {
     if (isLogged && !isAdmin && page === "login") setPage("dashboard");
   }, [authLoading, isLogged, isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Show reset modal when Supabase fires PASSWORD_RECOVERY ──
+  // Supabase JS v2 (detectSessionInUrl) clears the URL hash before React
+  // mounts, so URL-hash detection is unreliable. The authoritative signal
+  // is the PASSWORD_RECOVERY event exposed via isRecovering in AuthContext.
+  useEffect(() => {
+    if (isRecovering) setShowResetModal(true);
+  }, [isRecovering]);
+
   // ── Handle Supabase auth redirects ───────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const hash   = new URLSearchParams(window.location.hash.slice(1));
-    // Supabase password recovery redirect
+    // Fallback: catch recovery when hash hasn't been cleared yet
     if (params.get("type") === "recovery" || hash.get("type") === "recovery") {
       window.history.replaceState({}, "", window.location.pathname);
       setShowResetModal(true);
@@ -510,7 +444,14 @@ export default function App() {
       password:  fd.password,
     });
     if (!result.success) return { ok: false, msg: result.error };
-    return { ok: true, emailConfirmationRequired: result.emailConfirmationRequired };
+    // Send activation welcome email via EmailJS
+    sendEmail("activation", {
+      to_name:      `${sanitize(fd.firstName)} ${sanitize(fd.lastName)}`.trim(),
+      to_email:     sanitize(fd.email).toLowerCase(),
+      activate_url: `${window.location.origin}`,
+      platform:     ls("orb_siteName", "Orbit Learning"),
+    });
+    return { ok: true, emailConfirmationRequired: false };
   };
 
   const logout = async () => {
@@ -586,7 +527,17 @@ export default function App() {
           headers: { "Content-Type": "application/json", ...authHeader },
           body: JSON.stringify({ courseId: course.id, orderId }),
         });
-        if (res.ok) { await refreshEnrollments(); nav("course-learn", course); }
+        if (res.ok) {
+          await refreshEnrollments();
+          sendEmail("order_confirmation", {
+            to_name:     user?.name || user?.email,
+            to_email:    user?.email,
+            course_name: course.title,
+            amount:      "Free",
+            order_id:    orderId,
+          });
+          nav("course-learn", course);
+        }
       } catch (e) {
         console.error("Free enrollment failed:", e);
       }
@@ -2172,7 +2123,7 @@ function SignupPage({ nav, signup, t, isRTL, onSocial }) {
         setErrIsLogin(false);
       }
     } else {
-      setDone(true);
+      nav("login");
     }
   };
 
@@ -2578,6 +2529,28 @@ function CareersPage({ nav, t }) {
 
 function HelpPage({ nav, t }) {
   const isRTL = t?.dir === "rtl";
+  const [cf, setCf]         = useState({ name:"", email:"", message:"" });
+  const [cfLoading, setCfL] = useState(false);
+  const [cfDone, setCfDone] = useState(false);
+  const [cfErr, setCfErr]   = useState("");
+
+  const handleContact = async (e) => {
+    e.preventDefault(); setCfErr(""); setCfDone(false);
+    if (!cf.name || !cf.email || !cf.message) { setCfErr(isRTL?"يرجى ملء جميع الحقول":"Please fill all fields"); return; }
+    setCfL(true);
+    const ok = await sendEmail("contact", {
+      to_name:    "Support Team",
+      to_email:   "support@orbit.sa",
+      from_name:  cf.name,
+      from_email: cf.email,
+      subject:    isRTL ? `رسالة من ${cf.name}` : `Contact Us message from ${cf.name}`,
+      message:    cf.message,
+    });
+    setCfL(false);
+    if (ok) { setCfDone(true); setCf({ name:"", email:"", message:"" }); }
+    else setCfErr(isRTL?"حدث خطأ، يرجى المحاولة لاحقاً":"Something went wrong, please try again.");
+  };
+
   const faqs = isRTL ? [
     {q:"كيف أسجّل في كورس؟",                  a:"تصفح الكورسات، اضغط على أي كورس، ثم اضغط 'اشترك الآن'. سيرشدك النظام خلال عملية الدفع الآمنة."},
     {q:"ما وسائل الدفع المقبولة؟",              a:"نقبل البطاقات الائتمانية، Apple Pay، وSTC Pay. جميع الأسعار تشمل ضريبة القيمة المضافة 15% وفق لوائح المملكة."},
@@ -2591,28 +2564,43 @@ function HelpPage({ nav, t }) {
     {q:"How do I access my courses?",          a:"After enrollment, go to your Dashboard and click 'Continue Learning' on any enrolled course."},
     {q:"Do courses expire?",                   a:"No. Once enrolled, you have lifetime access to the course content including any future updates."},
   ];
-  const contacts = isRTL
-    ? [{icon:"✉️",l:"البريد الإلكتروني",v:"support@orbit.sa"},{icon:"💬",l:"الدردشة المباشرة",v:"متاح داخل التطبيق"}]
-    : [{icon:"✉️",l:"Email",v:"support@orbit.sa"},{icon:"💬",l:"Live Chat",v:"Available in-app"}];
+
   return (
     <StaticPage title={isRTL?"مركز المساعدة":"Help Center"} isRTL={isRTL}>
+      {/* ── CONTACT FORM ── */}
       <div style={{background:"#fff",borderRadius:20,padding:40,border:"1px solid rgba(45,51,71,0.07)",marginBottom:32}}>
-        <h2 style={{fontFamily:isRTL?"'Cairo',serif":"'Playfair Display',serif",fontSize:22,fontWeight:700,color:C.navy,marginBottom:12,textAlign:isRTL?"right":"left"}}>
-          {isRTL?"تواصل مع الدعم":"Contact Support"}
+        <h2 style={{fontFamily:isRTL?"'Cairo',serif":"'Playfair Display',serif",fontSize:22,fontWeight:700,color:C.navy,marginBottom:8,textAlign:isRTL?"right":"left"}}>
+          {isRTL?"تواصل معنا":"Contact Us"}
         </h2>
         <p style={{fontSize:15,color:"#4A5568",marginBottom:24,textAlign:isRTL?"right":"left"}}>
           {isRTL?"فريقنا متاح الأحد – الخميس، من 9 صباحاً حتى 6 مساءً.":"Our team is available Sunday–Thursday, 9am–6pm AST."}
         </p>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-          {contacts.map((c,i)=>(
-            <div key={i} style={{padding:20,background:C.bg,borderRadius:12,border:"1px solid #E8E4DD",textAlign:isRTL?"right":"left"}}>
-              <p style={{fontSize:20,marginBottom:8}}>{c.icon}</p>
-              <p style={{fontSize:12,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:1}}>{c.l}</p>
-              <p style={{fontSize:15,fontWeight:600,color:C.navy,marginTop:4}}>{c.v}</p>
-            </div>
-          ))}
-        </div>
+        {cfDone ? (
+          <div style={{textAlign:"center",padding:"24px 0"}}>
+            <div style={{fontSize:40,marginBottom:12}}>✅</div>
+            <p style={{fontSize:16,fontWeight:600,color:C.navy}}>{isRTL?"تم إرسال رسالتك بنجاح!":"Message sent successfully!"}</p>
+            <p style={{fontSize:14,color:"#6B7280",marginTop:4}}>{isRTL?"سنرد عليك في أقرب وقت ممكن.":"We'll get back to you as soon as possible."}</p>
+          </div>
+        ) : (
+          <form onSubmit={handleContact} style={{display:"flex",flexDirection:"column",gap:14}}>
+            <input required value={cf.name} onChange={e=>setCf({...cf,name:e.target.value})}
+              placeholder={isRTL?"الاسم الكامل":"Full name"}
+              style={{...S.input,textAlign:isRTL?"right":"left"}}/>
+            <input required type="email" value={cf.email} onChange={e=>setCf({...cf,email:e.target.value})}
+              placeholder={isRTL?"البريد الإلكتروني":"Email address"}
+              style={{...S.input,textAlign:isRTL?"right":"left"}}/>
+            <textarea required rows={4} value={cf.message} onChange={e=>setCf({...cf,message:e.target.value})}
+              placeholder={isRTL?"اكتب رسالتك هنا...":"Write your message here..."}
+              style={{...S.input,resize:"vertical",textAlign:isRTL?"right":"left"}}/>
+            {cfErr && <p style={{color:C.danger,fontSize:13}}>{cfErr}</p>}
+            <button type="submit" disabled={cfLoading} style={{...S.btnPrimary,alignSelf:"flex-start",padding:"12px 32px",opacity:cfLoading?0.6:1}}>
+              {cfLoading ? (isRTL?"جاري الإرسال...":"Sending...") : (isRTL?"إرسال الرسالة":"Send Message")}
+            </button>
+          </form>
+        )}
       </div>
+
+      {/* ── FAQ ── */}
       <h2 style={{...S.secTitle,marginBottom:20,textAlign:isRTL?"right":"left",fontFamily:isRTL?"'Cairo',serif":"'Playfair Display',serif"}}>
         {isRTL?"الأسئلة الشائعة":"Frequently Asked Questions"}
       </h2>
