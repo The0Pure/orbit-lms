@@ -14,8 +14,9 @@
     margin: 0; font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
     background: var(--bg); color: var(--text); display: flex; justify-content: center; padding: 48px 16px;
   }
-  .card { background: #fff; border-radius: 18px; padding: 36px; max-width: 640px; width: 100%; box-shadow: 0 8px 30px rgba(0,0,0,0.06); }
+  .card { background: #fff; border-radius: 18px; padding: 36px; max-width: 640px; width: 100%; box-shadow: 0 8px 30px rgba(0,0,0,0.06); margin-bottom: 24px; }
   h1 { font-size: 26px; margin: 0 0 6px; color: var(--navy); }
+  h2 { font-size: 18px; margin: 0 0 6px; color: var(--navy); }
   p.sub { color: #6B7280; font-size: 14px; margin: 0 0 28px; line-height: 1.5; }
   #dropzone {
     border: 2px dashed #D1D5DB; border-radius: 16px; padding: 40px 20px; text-align: center;
@@ -36,20 +37,36 @@
   .msg.error { background: var(--danger-bg); color: var(--danger); }
   footer { margin-top: 28px; font-size: 12px; color: #9CA3AF; }
   code { background: #F3F4F6; padding: 2px 6px; border-radius: 6px; }
+
+  #chatLog { height: 320px; overflow-y: auto; border: 1px solid #E5E7EB; border-radius: 12px; padding: 12px; background: #FAFAF9; }
+  .chatMsg { margin: 0 0 10px; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; max-width: 85%; white-space: pre-wrap; }
+  .chatMsg.user { background: var(--navy); color: #fff; margin-left: auto; }
+  .chatMsg.assistant { background: #EFEAE2; color: var(--text); }
+  .chatRow { display: flex; gap: 10px; margin-top: 14px; }
+  .chatRow input[type=text] { flex: 1; padding: 10px 14px; border: 1px solid #D1D5DB; border-radius: 10px; font-size: 14px; }
+  #chatHint { font-size: 12px; color: #9CA3AF; margin-top: 8px; }
 </style>
 </head>
 <body>
+<div>
   <div class="card">
     <h1>Data Scientist AI</h1>
     <p class="sub">
-      Upload any Excel or CSV file. It will be cleaned, its key numeric metrics forecasted forward in time,
-      turned into a dashboard, and described in a Word report — all downloaded as a ZIP.
+      Upload any Excel, CSV, or SQLite (.db) file. It will be cleaned, its key numeric metrics
+      forecasted forward in time, turned into a dashboard, and described in a Word report —
+      all downloaded as a ZIP. You can then chat with it about the results below.
     </p>
 
     <div id="dropzone">
-      <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none" />
-      <p id="dzText">Click to choose or drag an Excel/CSV file here</p>
-      <p id="filehint">.xlsx, .xls or .csv</p>
+      <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.db,.sqlite,.sqlite3" style="display:none" />
+      <p id="dzText">Click to choose or drag an Excel/CSV/SQLite file here</p>
+      <p id="filehint">.xlsx, .xls, .csv, .db or .sqlite</p>
+    </div>
+
+    <div class="row" id="tableRow" style="display:none">
+      <label class="periods">Table:
+        <select id="tableSelect"></select>
+      </label>
     </div>
 
     <div class="row">
@@ -64,10 +81,13 @@
 
     <div class="row" id="horizonRow">
       <label class="periods">Forecast horizon:
-        <input type="number" id="horizonValue" value="2" min="1" max="20" />
+        <input type="number" id="horizonValue" value="2" min="1" max="40" />
         <select id="horizonUnit">
-          <option value="quarters" selected>quarter(s)</option>
           <option value="days">day(s)</option>
+          <option value="weeks">week(s)</option>
+          <option value="months">month(s)</option>
+          <option value="quarters" selected>quarter(s)</option>
+          <option value="years">year(s)</option>
         </select>
       </label>
       <button id="processBtn" disabled>Process &amp; Download</button>
@@ -80,6 +100,22 @@
       Server: <code id="apiUrl"></code>
     </footer>
   </div>
+
+  <div class="card">
+    <h2>Chat with your data</h2>
+    <p class="sub" style="margin-bottom:14px">
+      Ask anything about the analyzed dataset — trends, risks, recommendations — and get answers
+      from an expert data analyst / business consultant. Requires the server to have an
+      <code>ANTHROPIC_API_KEY</code> set.
+    </p>
+    <div id="chatLog"></div>
+    <div class="chatRow">
+      <input type="text" id="chatInput" placeholder="Process a file first, then ask a question..." disabled />
+      <button id="chatSend" disabled>Send</button>
+    </div>
+    <p id="chatHint">No analyzed dataset yet — upload and process a file above to start chatting.</p>
+  </div>
+</div>
 
   <script src="app.js"></script>
 </body>

@@ -1,16 +1,42 @@
-"""Data cleaning utilities for LMS reports."""
+"""Data cleaning utilities for any tabular dataset (CSV, Excel, or SQLite)."""
+import sqlite3
+
 import pandas as pd
 import numpy as np
 
+DB_EXTENSIONS = (".db", ".sqlite", ".sqlite3")
 
-def load_report(path: str) -> pd.DataFrame:
+
+def load_report(path: str, table: str | None = None) -> pd.DataFrame:
     if path.lower().endswith((".xlsx", ".xls")):
         return pd.read_excel(path)
+    if path.lower().endswith(DB_EXTENSIONS):
+        return load_sqlite_table(path, table)
     return pd.read_csv(path)
 
 
+def list_sqlite_tables(path: str) -> list[str]:
+    with sqlite3.connect(path) as conn:
+        rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    return [r[0] for r in rows]
+
+
+def load_sqlite_table(path: str, table: str | None = None) -> pd.DataFrame:
+    """Load a table from a SQLite database file. Defaults to the table with the most rows."""
+    with sqlite3.connect(path) as conn:
+        tables = list_sqlite_tables(path)
+        if not tables:
+            raise ValueError(f"No tables found in SQLite database '{path}'.")
+        if table is None:
+            counts = {t: conn.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0] for t in tables}
+            table = max(counts, key=counts.get)
+        elif table not in tables:
+            raise ValueError(f"Table '{table}' not found. Available tables: {', '.join(tables)}")
+        return pd.read_sql_query(f'SELECT * FROM "{table}"', conn)
+
+
 def clean(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
-    """Clean a raw LMS report and return the cleaned frame plus a summary of changes."""
+    """Clean a raw tabular dataset and return the cleaned frame plus a summary of changes."""
     log = {"rows_in": len(df), "duplicates_removed": 0, "missing_filled": {}, "columns_normalized": []}
 
     df = df.copy()
