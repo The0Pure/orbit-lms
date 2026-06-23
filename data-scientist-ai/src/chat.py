@@ -1,14 +1,18 @@
-"""Lets the user chat with an LLM that has full context of the analyzed dataset,
+"""Lets the user chat with a local LLM that has full context of the analyzed dataset,
 acting as an expert data analyst and business consultant.
 
-Requires an ANTHROPIC_API_KEY environment variable. Without one, `ask()` raises
-a clear error instead of silently failing.
+Runs entirely against a local Ollama server (https://ollama.com) — no external API key,
+no data leaving the machine. Requires Ollama to be running locally with a model pulled,
+e.g. `ollama pull llama3.1`. Without Ollama reachable, `ask()` raises a clear error
+instead of silently failing.
 """
+import json
 import os
+import urllib.error
+import urllib.request
 
-import pandas as pd
-
-MODEL = "claude-sonnet-4-5"
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1")
 
 SYSTEM_PROMPT = """\
 You are an expert data analyst and business consultant. You think like a seasoned \
@@ -16,18 +20,21 @@ business intelligence professional: precise with numbers, clear about uncertaint
 and always tying findings back to concrete business decisions (pricing, staffing, \
 marketing spend, risk, growth opportunities).
 
-You have been given a structured summary of a dataset that has already been cleaned \
-and analyzed (column stats, detected trends, and forecasts). Use it as your primary \
-source of truth — don't invent numbers that aren't in the summary. If the user asks \
-something the summary can't answer, say so plainly and suggest what additional data \
-or analysis would be needed.
+Below is a JSON object with the exact, already-computed summary of a dataset (column \
+stats, detected trends, and forecasts). This JSON is your ONLY source of truth:
+- Quote numbers exactly as they appear in the JSON. Never recompute, round differently,
+  estimate, or invent a number that isn't present in it.
+- If the user asks something this JSON can't answer, say so plainly and suggest what
+  additional data or analysis would be needed — do not guess.
+- If a forecast or comparison section is missing/empty, that analysis was not run for
+  this dataset; say so instead of making one up.
 
-Keep answers focused and practical. Use plain business language, not jargon, unless \
+Keep answers focused and practical. Use plain business language, not jargon, unless
 the user asks for technical detail.
 """
 
 
-def build_context(df: pd.DataFrame, log: dict, forecasts: dict, yearly: dict) -> dict:
+def build_context(df, log: dict, forecasts: dict, yearly: dict) -> dict:
     """Summarize the cleaned dataset, forecasts, and YoY comparisons into a compact,
     JSON-serializable dict that can be replayed into an LLM prompt later (no need to
     keep the original DataFrame around)."""
@@ -77,69 +84,41 @@ def build_context(df: pd.DataFrame, log: dict, forecasts: dict, yearly: dict) ->
     }
 
 
-def _context_to_prompt(context: dict) -> str:
-    lines = [
-        f"Rows: {context['rows_in']} originally -> {context['rows_out']} after cleaning "
-        f"({context['duplicates_removed']} duplicates removed).",
-        f"Columns: {', '.join(context['columns'])}",
-        f"Date column used for trends: {context.get('date_column') or 'none detected'}",
-        "",
-        "Numeric column summary:",
-    ]
-    for col, stats in context["numeric_summary"].items():
-        lines.append(
-            f"- {col}: mean={stats['mean']}, median={stats['median']}, std={stats['std']}, "
-            f"min={stats['min']}, max={stats['max']}"
-        )
-
-    if context["forecasts"]:
-        lines.append("\nShort-horizon forecasts:")
-        for metric, f in context["forecasts"].items():
-            lines.append(
-                f"- {metric}: recent average {f['recent_actual_avg']} -> forecast average "
-                f"{f['forecast_avg']} over the next {f['forecast_horizon_days']} days"
-            )
-
-    if context["yearly_comparison"]:
-        lines.append("\nYear-over-year comparison:")
-        for metric, c in context["yearly_comparison"].items():
-            lines.append(
-                f"- {metric}: {c['this_year']} total = {c['this_year_total']}, "
-                f"{c['next_year']} projected total = {c['next_year_total']} "
-                f"({c['pct_change']:+.1f}%)"
-            )
-
-    return "\n".join(lines)
-
-
 def ask(context: dict, message: str, history: list[dict] | None = None) -> str:
     """Ask a question about the analyzed dataset. `history` is a list of
     {"role": "user"|"assistant", "content": str} from earlier turns in the conversation."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY is not set. Set it as an environment variable to enable chat "
-            "(e.g. `export ANTHROPIC_API_KEY=sk-ant-...` before running the server)."
-        )
+    system = SYSTEM_PROMPT + "\n\nDataset summary (JSON):\n" + json.dumps(context, indent=2)
 
-    try:
-        import anthropic
-    except ImportError as exc:
-        raise RuntimeError(
-            "The 'anthropic' package is not installed. Run `pip install anthropic`."
-        ) from exc
-
-    client = anthropic.Anthropic(api_key=api_key)
-
-    messages = list(history or [])
+    messages = [{"role": "system", "content": system}]
+    messages.extend(history or [])
     messages.append({"role": "user", "content": message})
 
-    system = SYSTEM_PROMPT + "\n\nDataset summary:\n" + _context_to_prompt(context)
+    payload = json.dumps(
+        {
+            "model": OLLAMA_MODEL,
+            "messages": messages,
+            "stream": False,
+            "options": {"temperature": 0},
+        }
+    ).encode("utf-8")
 
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=1024,
-        system=system,
-        messages=messages,
+    request = urllib.request.Request(
+        f"{OLLAMA_HOST}/api/chat",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
     )
-    return "".join(block.text for block in response.content if block.type == "text")
+
+    try:
+        with urllib.request.urlopen(request, timeout=120) as resp:
+            body = json.loads(resp.read())
+    except urllib.error.URLError as exc:
+        raise RuntimeError(
+            f"Could not reach a local Ollama server at {OLLAMA_HOST}. Make sure Ollama is "
+            f"running (`ollama serve`) and the model is pulled (`ollama pull {OLLAMA_MODEL}`)."
+        ) from exc
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Ollama returned an error: {detail}") from exc
+
+    return body.get("message", {}).get("content", "")

@@ -24,20 +24,24 @@ cd data-scientist-ai
 pip install -r requirements.txt
 ```
 
-To enable the chat feature, set an Anthropic API key before starting the server:
+To enable the chat feature, install [Ollama](https://ollama.com), start it, and pull a model:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+ollama serve &
+ollama pull llama3.1
 ```
 
-Without this key, everything else (cleaning, forecasting, dashboard, report) still works — only
-`/chat` requires it, and it returns a clear error if the key is missing.
+Chat runs entirely against this local Ollama server — no external API key, nothing leaves your
+machine. Without Ollama running, everything else (cleaning, forecasting, dashboard, report) still
+works — only `/chat` requires it, and it returns a clear error if Ollama isn't reachable. To use a
+different model or a non-default Ollama host, set `OLLAMA_MODEL` / `OLLAMA_HOST` before starting
+the server.
 
 ### Forecasting model (TimesFM)
 
 Forecasts are produced by [Google's TimesFM](https://github.com/google-research/timesfm), a
-pretrained, zero-shot time-series foundation model — Claude is not involved in producing the
-numbers, only in describing/discussing them via chat. The `timesfm[torch]` dependency in
+pretrained, zero-shot time-series foundation model — the chat model is not involved in producing
+the numbers, only in describing/discussing them via chat. The `timesfm[torch]` dependency in
 `requirements.txt` pulls in PyTorch; the ~200M-parameter checkpoint (`google/timesfm-2.5-200m-pytorch`,
 ~800MB) downloads automatically from Hugging Face on first use and is cached under
 `~/.cache/huggingface/`. This needs a one-time internet connection and roughly 4GB RAM / 2GB VRAM.
