@@ -101,48 +101,58 @@ def run_forecasts(df: pd.DataFrame, date_col: str, periods: int = 30) -> dict:
     return results
 
 
-def yearly_comparison(df: pd.DataFrame, date_col: str, value_col: str) -> dict:
-    """Forecast far enough ahead to cover all of next year, then compare
-    this year's actual monthly totals against next year's forecasted monthly totals."""
+def yearly_comparison(df: pd.DataFrame, date_col: str, value_col: str, years_ahead: int = 1) -> dict:
+    """Forecast far enough ahead to cover `years_ahead` future years, then compare this year's
+    actual monthly totals against each of those future years' forecasted monthly totals."""
     last_date = df[date_col].dropna().max()
     this_year = last_date.year
-    next_year = this_year + 1
+    last_future_year = this_year + years_ahead
 
-    days_to_cover_next_year = (pd.Timestamp(f"{next_year}-12-31") - last_date).days
-    periods = max(days_to_cover_next_year, 30)
+    days_to_cover = (pd.Timestamp(f"{last_future_year}-12-31") - last_date).days
+    periods = max(days_to_cover, 30)
 
     combined = forecast_metric(df, date_col, value_col, periods=periods, degree=1)
     combined["year"] = combined["date"].dt.year
     combined["month"] = combined["date"].dt.month
 
-    this_year_monthly = (
-        combined[combined["year"] == this_year].groupby("month")["value"].sum().reindex(range(1, 13), fill_value=0)
-    )
-    next_year_monthly = (
-        combined[combined["year"] == next_year].groupby("month")["value"].sum().reindex(range(1, 13), fill_value=0)
-    )
+    def monthly_totals(year):
+        return combined[combined["year"] == year].groupby("month")["value"].sum().reindex(range(1, 13), fill_value=0)
 
+    this_year_monthly = monthly_totals(this_year)
     this_year_total = this_year_monthly.sum()
-    next_year_total = next_year_monthly.sum()
-    pct_change = ((next_year_total - this_year_total) / this_year_total * 100) if this_year_total else 0
+
+    years = []
+    for offset in range(1, years_ahead + 1):
+        year = this_year + offset
+        year_monthly = monthly_totals(year)
+        year_total = year_monthly.sum()
+        pct_change = ((year_total - this_year_total) / this_year_total * 100) if this_year_total else 0
+        years.append({
+            "year": year,
+            "monthly": year_monthly,
+            "total": year_total,
+            "pct_change": pct_change,
+        })
 
     return {
         "this_year": this_year,
-        "next_year": next_year,
         "this_year_monthly": this_year_monthly,
-        "next_year_monthly": next_year_monthly,
         "this_year_total": this_year_total,
-        "next_year_total": next_year_total,
-        "pct_change": pct_change,
+        "years": years,
+        # Back-compat aliases for the immediate next year (years_ahead == 1 is the common case).
+        "next_year": years[0]["year"],
+        "next_year_monthly": years[0]["monthly"],
+        "next_year_total": years[0]["total"],
+        "pct_change": years[0]["pct_change"],
     }
 
 
-def run_yearly_comparisons(df: pd.DataFrame, date_col: str) -> dict:
+def run_yearly_comparisons(df: pd.DataFrame, date_col: str, years_ahead: int = 1) -> dict:
     metrics = find_metric_columns(df)
     results = {}
     for metric, col in metrics.items():
         try:
-            results[metric] = {"column": col, **yearly_comparison(df, date_col, col)}
+            results[metric] = {"column": col, **yearly_comparison(df, date_col, col, years_ahead=years_ahead)}
         except ValueError:
             continue
     return results

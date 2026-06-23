@@ -34,7 +34,10 @@ def run_pipeline(
         if mode in ("predict", "both"):
             forecasts = run_forecasts(df, log["date_column"], periods=periods)
         if mode in ("compare", "both"):
-            yearly = run_yearly_comparisons(df, log["date_column"])
+            # If the user asked for a multi-year horizon, compare that many future years
+            # ahead instead of always limiting the comparison to just next year.
+            years_ahead = max(1, round(periods / DAYS_PER_YEAR))
+            yearly = run_yearly_comparisons(df, log["date_column"], years_ahead=years_ahead)
 
     dashboard_path = os.path.join(out_dir, "dashboard.png")
     chart_titles = build_dashboard(df, log.get("date_column"), forecasts, yearly, dashboard_path)

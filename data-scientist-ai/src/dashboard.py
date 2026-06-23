@@ -66,18 +66,33 @@ def build_dashboard(
     for metric, comp in yearly.items():
         ax = axes[idx]
         x = np.arange(12)
-        width = 0.38
-        ax.bar(x - width / 2, comp["this_year_monthly"].values, width,
-               color=PALETTE["actual"], label=str(comp["this_year"]))
-        ax.bar(x + width / 2, comp["next_year_monthly"].values, width,
-               color=PALETTE["forecast"], label=f"{comp['next_year']} (forecast)")
+        groups = [(comp["this_year"], comp["this_year_monthly"], False)] + [
+            (y["year"], y["monthly"], True) for y in comp["years"]
+        ]
+        n_groups = len(groups)
+        width = 0.8 / n_groups
+        forecast_shades = np.linspace(0.6, 1.0, max(len(comp["years"]), 1))
+        forecast_idx = 0
+        for i, (year, monthly, is_forecast) in enumerate(groups):
+            offset = (i - (n_groups - 1) / 2) * width
+            if is_forecast:
+                color = PALETTE["forecast"]
+                alpha = forecast_shades[forecast_idx]
+                forecast_idx += 1
+                label = f"{year} (forecast)"
+            else:
+                color = PALETTE["actual"]
+                alpha = 1.0
+                label = str(year)
+            ax.bar(x + offset, monthly.values, width, color=color, alpha=alpha, label=label)
         ax.set_xticks(x)
         ax.set_xticklabels(MONTH_LABELS, fontsize=8)
-        ax.legend(loc="upper left", fontsize=9, frameon=False)
-        _style_axis(ax, f"{metric.replace('_',' ').title()} — {comp['this_year']} vs {comp['next_year']}")
+        ax.legend(loc="upper left", fontsize=8, frameon=False)
+        last_year = comp["years"][-1]["year"]
+        _style_axis(ax, f"{metric.replace('_',' ').title()} — {comp['this_year']} vs {last_year}")
         chart_titles.append(
-            f"{metric.replace('_',' ').title()}: {comp['this_year']} vs {comp['next_year']} forecast "
-            f"({comp['pct_change']:+.1f}%)"
+            f"{metric.replace('_',' ').title()}: {comp['this_year']} vs {last_year} forecast "
+            f"({comp['years'][-1]['pct_change']:+.1f}%)"
         )
         idx += 1
 

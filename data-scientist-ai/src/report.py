@@ -192,11 +192,14 @@ def build_report(
         )
     for metric, comp in yearly.items():
         label = _label(metric)
-        direction = "ahead of" if comp["pct_change"] >= 0 else "behind"
+        last_year = comp["years"][-1]["year"]
+        direction = "ahead of" if comp["years"][-1]["pct_change"] >= 0 else "behind"
+        years_word = "year" if len(comp["years"]) == 1 else f"{len(comp['years'])} years"
         doc.add_paragraph(
-            f"{label} — {comp['this_year']} vs {comp['next_year']}: side-by-side bars compare this "
-            f"year's actual monthly totals (blue) against next year's projected totals (orange), so "
-            f"you can see at a glance which months are expected to run {direction} this year's pace.",
+            f"{label} — {comp['this_year']} vs {last_year}: side-by-side bars compare this year's "
+            f"actual monthly totals (blue) against each of the next {years_word}' projected totals "
+            f"(orange shades), so you can see at a glance which months are expected to run "
+            f"{direction} this year's pace.",
             style="List Bullet",
         )
     for t in chart_titles[len(forecasts) + len(yearly):]:
@@ -233,23 +236,29 @@ def build_report(
     # ── Year-over-Year Outlook ──────────────────────────────
     _heading(doc, "4. Year-over-Year Outlook")
     if yearly:
+        max_years = max(len(comp["years"]) for comp in yearly.values())
         doc.add_paragraph(
-            "The table below compares this year's totals against next year's projection for each "
-            "key metric, assuming current trends continue."
+            "The table below compares this year's totals against the projection for each "
+            f"of the next {max_years} year(s), for each key metric, assuming current trends continue."
         )
+        headers = ["Metric", "This Year"] + [
+            f"+{i} Year (Forecast)" if i > 1 else "Next Year (Forecast)" for i in range(1, max_years + 1)
+        ]
         yoy_rows = []
         for metric, comp in yearly.items():
-            yoy_rows.append((
-                _label(metric),
-                f"{comp['this_year_total']:,.1f}",
-                f"{comp['next_year_total']:,.1f}",
-                f"{comp['pct_change']:+.1f}%",
-            ))
-        _add_table(doc, ["Metric", f"This Year", f"Next Year (Forecast)", "Change"], yoy_rows)
+            row = [_label(metric), f"{comp['this_year_total']:,.1f}"]
+            for i in range(max_years):
+                if i < len(comp["years"]):
+                    y = comp["years"][i]
+                    row.append(f"{y['total']:,.1f} ({y['pct_change']:+.1f}%)")
+                else:
+                    row.append("—")
+            yoy_rows.append(tuple(row))
+        _add_table(doc, headers, yoy_rows)
     else:
         doc.add_paragraph(
             "Not enough date-stamped history was available to compare this year against a "
-            "next-year projection."
+            "future-year projection."
         )
 
     # ── Business Recommendations ─────────────────────────────

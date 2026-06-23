@@ -63,10 +63,15 @@ def build_context(df, log: dict, forecasts: dict, yearly: dict) -> dict:
     yearly_summary = {
         metric: {
             "this_year": comp["this_year"],
-            "next_year": comp["next_year"],
             "this_year_total": round(float(comp["this_year_total"]), 4),
-            "next_year_total": round(float(comp["next_year_total"]), 4),
-            "pct_change": round(float(comp["pct_change"]), 2),
+            "forecast_years": [
+                {
+                    "year": y["year"],
+                    "total": round(float(y["total"]), 4),
+                    "pct_change": round(float(y["pct_change"]), 2),
+                }
+                for y in comp["years"]
+            ],
         }
         for metric, comp in yearly.items()
     }
