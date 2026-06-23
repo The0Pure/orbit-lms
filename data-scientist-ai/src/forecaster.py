@@ -24,8 +24,15 @@ def find_metric_columns(df: pd.DataFrame, max_metrics: int = MAX_AUTO_METRICS) -
     return {col: col for col in candidates[:max_metrics]}
 
 
-def forecast_metric(df: pd.DataFrame, date_col: str, value_col: str, periods: int = 30) -> pd.DataFrame:
-    """Aggregate value_col by day and forecast `periods` days ahead with a polynomial regression."""
+def forecast_metric(
+    df: pd.DataFrame, date_col: str, value_col: str, periods: int = 30, degree: int = 2
+) -> pd.DataFrame:
+    """Aggregate value_col by day and forecast `periods` days ahead with a polynomial regression.
+
+    `degree=2` captures short-term acceleration/deceleration well, but compounds into unrealistic
+    swings over long horizons (e.g. a full year ahead) — callers forecasting far out should pass
+    `degree=1` for a stable linear extrapolation instead.
+    """
     series = (
         df[[date_col, value_col]]
         .dropna()
@@ -40,7 +47,7 @@ def forecast_metric(df: pd.DataFrame, date_col: str, value_col: str, periods: in
     x = np.arange(len(series)).reshape(-1, 1)
     y = series.values
 
-    poly = PolynomialFeatures(degree=2)
+    poly = PolynomialFeatures(degree=degree)
     x_poly = poly.fit_transform(x)
     model = LinearRegression().fit(x_poly, y)
 
@@ -76,7 +83,7 @@ def yearly_comparison(df: pd.DataFrame, date_col: str, value_col: str) -> dict:
     days_to_cover_next_year = (pd.Timestamp(f"{next_year}-12-31") - last_date).days
     periods = max(days_to_cover_next_year, 30)
 
-    combined = forecast_metric(df, date_col, value_col, periods=periods)
+    combined = forecast_metric(df, date_col, value_col, periods=periods, degree=1)
     combined["year"] = combined["date"].dt.year
     combined["month"] = combined["date"].dt.month
 
