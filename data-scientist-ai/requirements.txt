@@ -8,3 +8,4 @@ scikit-learn>=1.3
 python-docx>=1.1
 openpyxl>=3.1
 anthropic>=0.40
+timesfm[torch]>=2.0.1

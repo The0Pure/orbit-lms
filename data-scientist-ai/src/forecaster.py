@@ -4,6 +4,8 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 
+from src import timesfm_forecaster
+
 MAX_AUTO_METRICS = 6
 ID_LIKE_PATTERNS = ["_id", "id_", "zip", "postal", "phone", "code"]
 
@@ -24,14 +26,33 @@ def find_metric_columns(df: pd.DataFrame, max_metrics: int = MAX_AUTO_METRICS) -
     return {col: col for col in candidates[:max_metrics]}
 
 
-def forecast_metric(
-    df: pd.DataFrame, date_col: str, value_col: str, periods: int = 30, degree: int = 2
-) -> pd.DataFrame:
-    """Aggregate value_col by day and forecast `periods` days ahead with a polynomial regression.
+def _forecast_polynomial(series: pd.Series, periods: int, degree: int) -> np.ndarray:
+    """Fallback used when TimesFM isn't installed/available.
 
     `degree=2` captures short-term acceleration/deceleration well, but compounds into unrealistic
     swings over long horizons (e.g. a full year ahead) — callers forecasting far out should pass
     `degree=1` for a stable linear extrapolation instead.
+    """
+    x = np.arange(len(series)).reshape(-1, 1)
+    y = series.values
+
+    poly = PolynomialFeatures(degree=degree)
+    x_poly = poly.fit_transform(x)
+    model = LinearRegression().fit(x_poly, y)
+
+    future_x = np.arange(len(series), len(series) + periods).reshape(-1, 1)
+    future_x_poly = poly.transform(future_x)
+    return np.clip(model.predict(future_x_poly), a_min=0, a_max=None)
+
+
+def forecast_metric(
+    df: pd.DataFrame, date_col: str, value_col: str, periods: int = 30, degree: int = 2
+) -> pd.DataFrame:
+    """Aggregate value_col by day and forecast `periods` days ahead.
+
+    Uses Google's TimesFM foundation model (zero-shot, pretrained) when available, since it
+    handles trend/seasonality without the long-horizon blowup polynomial regression suffers from.
+    Falls back to polynomial regression (see `_forecast_polynomial`) if TimesFM/torch aren't installed.
     """
     series = (
         df[[date_col, value_col]]
@@ -44,16 +65,16 @@ def forecast_metric(
     if len(series) < 5:
         raise ValueError(f"Not enough time-series data to forecast '{value_col}' (need >= 5 days).")
 
-    x = np.arange(len(series)).reshape(-1, 1)
-    y = series.values
-
-    poly = PolynomialFeatures(degree=degree)
-    x_poly = poly.fit_transform(x)
-    model = LinearRegression().fit(x_poly, y)
-
-    future_x = np.arange(len(series), len(series) + periods).reshape(-1, 1)
-    future_x_poly = poly.transform(future_x)
-    predictions = np.clip(model.predict(future_x_poly), a_min=0, a_max=None)
+    predictions = None
+    if timesfm_forecaster.is_available():
+        try:
+            predictions = timesfm_forecaster.forecast(series.values, periods)
+        except Exception:
+            # Model install is present but couldn't load (e.g. no network access to
+            # download the checkpoint from Hugging Face) — fall back below.
+            predictions = None
+    if predictions is None:
+        predictions = _forecast_polynomial(series, periods, degree)
 
     future_dates = pd.date_range(series.index[-1] + pd.Timedelta(days=1), periods=periods, freq="D")
 

@@ -4,8 +4,8 @@ A **standalone Python program** that acts as a data scientist for any tabular da
 not tied to any specific app or platform. Give it any CSV, Excel, or SQLite file and it will:
 
 1. **Clean** the data (normalize columns, remove duplicates, fill missing values, detect a date column).
-2. **Forecast** the most informative numeric columns forward in time using polynomial regression —
-   in days, weeks, months, quarters, or years.
+2. **Forecast** the most informative numeric columns forward in time using Google's **TimesFM**
+   foundation model — in days, weeks, months, quarters, or years.
 3. **Compare this year vs. next year** for each forecasted metric (monthly totals, % change).
 4. **Build a dashboard** (`output/dashboard.png`) with trend/forecast charts, year-over-year bars, and distributions.
 5. **Write a Word report** (`output/report.docx`) describing the cleaning, the dashboard, and the forecasts in plain,
@@ -32,6 +32,19 @@ export ANTHROPIC_API_KEY=sk-ant-...
 
 Without this key, everything else (cleaning, forecasting, dashboard, report) still works — only
 `/chat` requires it, and it returns a clear error if the key is missing.
+
+### Forecasting model (TimesFM)
+
+Forecasts are produced by [Google's TimesFM](https://github.com/google-research/timesfm), a
+pretrained, zero-shot time-series foundation model — Claude is not involved in producing the
+numbers, only in describing/discussing them via chat. The `timesfm[torch]` dependency in
+`requirements.txt` pulls in PyTorch; the ~200M-parameter checkpoint (`google/timesfm-2.5-200m-pytorch`,
+~800MB) downloads automatically from Hugging Face on first use and is cached under
+`~/.cache/huggingface/`. This needs a one-time internet connection and roughly 4GB RAM / 2GB VRAM.
+
+If `timesfm`/`torch` aren't installed, or the checkpoint can't be downloaded (no internet access),
+the tool automatically falls back to a polynomial-regression forecast so it keeps working — no
+configuration needed either way.
 
 ## Usage — Web UI (recommended)
 
