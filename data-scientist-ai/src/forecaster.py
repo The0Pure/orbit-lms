@@ -61,3 +61,50 @@ def run_forecasts(df: pd.DataFrame, date_col: str, periods: int = 30) -> dict:
         except ValueError:
             continue
     return results
+
+
+def yearly_comparison(df: pd.DataFrame, date_col: str, value_col: str) -> dict:
+    """Forecast far enough ahead to cover all of next year, then compare
+    this year's actual monthly totals against next year's forecasted monthly totals."""
+    last_date = df[date_col].dropna().max()
+    this_year = last_date.year
+    next_year = this_year + 1
+
+    days_to_cover_next_year = (pd.Timestamp(f"{next_year}-12-31") - last_date).days
+    periods = max(days_to_cover_next_year, 30)
+
+    combined = forecast_metric(df, date_col, value_col, periods=periods)
+    combined["year"] = combined["date"].dt.year
+    combined["month"] = combined["date"].dt.month
+
+    this_year_monthly = (
+        combined[combined["year"] == this_year].groupby("month")["value"].sum().reindex(range(1, 13), fill_value=0)
+    )
+    next_year_monthly = (
+        combined[combined["year"] == next_year].groupby("month")["value"].sum().reindex(range(1, 13), fill_value=0)
+    )
+
+    this_year_total = this_year_monthly.sum()
+    next_year_total = next_year_monthly.sum()
+    pct_change = ((next_year_total - this_year_total) / this_year_total * 100) if this_year_total else 0
+
+    return {
+        "this_year": this_year,
+        "next_year": next_year,
+        "this_year_monthly": this_year_monthly,
+        "next_year_monthly": next_year_monthly,
+        "this_year_total": this_year_total,
+        "next_year_total": next_year_total,
+        "pct_change": pct_change,
+    }
+
+
+def run_yearly_comparisons(df: pd.DataFrame, date_col: str) -> dict:
+    metrics = find_metric_columns(df)
+    results = {}
+    for metric, col in metrics.items():
+        try:
+            results[metric] = {"column": col, **yearly_comparison(df, date_col, col)}
+        except ValueError:
+            continue
+    return results

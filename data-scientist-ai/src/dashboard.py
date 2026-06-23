@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 
 PALETTE = {"actual": "#2563eb", "forecast": "#f97316", "bar": "#10b981", "accent": "#6366f1"}
+MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 
 def _style_axis(ax, title):
@@ -16,12 +17,19 @@ def _style_axis(ax, title):
     ax.grid(axis="y", alpha=0.3)
 
 
-def build_dashboard(df: pd.DataFrame, date_col: str | None, forecasts: dict, output_path: str) -> list[str]:
+def build_dashboard(
+    df: pd.DataFrame,
+    date_col: str | None,
+    forecasts: dict,
+    yearly: dict,
+    output_path: str,
+) -> list[str]:
     """Render charts into a single dashboard image. Returns list of chart titles included."""
     numeric_cols = [c for c in df.select_dtypes(include="number").columns]
     n_forecast_charts = len(forecasts)
+    n_yearly_charts = len(yearly)
     n_extra = min(2, len(numeric_cols))
-    total_charts = max(1, n_forecast_charts + n_extra)
+    total_charts = max(1, n_forecast_charts + n_yearly_charts + n_extra)
 
     cols = 2
     rows = int(np.ceil(total_charts / cols))
@@ -45,6 +53,24 @@ def build_dashboard(df: pd.DataFrame, date_col: str | None, forecasts: dict, out
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
         _style_axis(ax, f"{metric.capitalize()} — Trend & Forecast")
         chart_titles.append(f"{metric.capitalize()} trend and {len(forecast)}-day forecast")
+        idx += 1
+
+    for metric, comp in yearly.items():
+        ax = axes[idx]
+        x = np.arange(12)
+        width = 0.38
+        ax.bar(x - width / 2, comp["this_year_monthly"].values, width,
+               color=PALETTE["actual"], label=str(comp["this_year"]))
+        ax.bar(x + width / 2, comp["next_year_monthly"].values, width,
+               color=PALETTE["forecast"], label=f"{comp['next_year']} (forecast)")
+        ax.set_xticks(x)
+        ax.set_xticklabels(MONTH_LABELS, fontsize=8)
+        ax.legend(loc="upper left", fontsize=9, frameon=False)
+        _style_axis(ax, f"{metric.capitalize()} — {comp['this_year']} vs {comp['next_year']}")
+        chart_titles.append(
+            f"{metric.capitalize()}: {comp['this_year']} vs {comp['next_year']} forecast "
+            f"({comp['pct_change']:+.1f}%)"
+        )
         idx += 1
 
     for col in numeric_cols[:n_extra]:

@@ -16,6 +16,7 @@ def build_report(
     df,
     log: dict,
     forecasts: dict,
+    yearly: dict,
     chart_titles: list[str],
     dashboard_image: str,
     output_path: str,
@@ -68,7 +69,22 @@ def build_report(
             "were found in this report."
         )
 
-    _heading(doc, "4. Key Takeaways")
+    _heading(doc, "4. Year-over-Year Comparison")
+    if yearly:
+        for metric, comp in yearly.items():
+            direction = "growth" if comp["pct_change"] >= 0 else "decline"
+            doc.add_paragraph(
+                f"{metric.capitalize()}: {comp['this_year']} total was {comp['this_year_total']:.2f}. "
+                f"Based on current trends, {comp['next_year']} is projected to total "
+                f"{comp['next_year_total']:.2f} — a {abs(comp['pct_change']):.1f}% {direction} "
+                f"year-over-year."
+            )
+    else:
+        doc.add_paragraph(
+            "Not enough date-stamped data was found to compare this year against next year's projection."
+        )
+
+    _heading(doc, "5. Key Takeaways")
     doc.add_paragraph(
         f"The dataset contains {log['rows_out']} clean records after removing "
         f"{log['duplicates_removed']} duplicates. "

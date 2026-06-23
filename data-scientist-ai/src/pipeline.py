@@ -2,7 +2,7 @@
 import os
 
 from src.cleaner import load_report, clean
-from src.forecaster import run_forecasts
+from src.forecaster import run_forecasts, run_yearly_comparisons
 from src.dashboard import build_dashboard
 from src.report import build_report
 
@@ -14,14 +14,16 @@ def run_pipeline(report_path: str, out_dir: str, periods: int = 30) -> dict:
     df, log = clean(raw_df)
 
     forecasts = {}
+    yearly = {}
     if log.get("date_column"):
         forecasts = run_forecasts(df, log["date_column"], periods=periods)
+        yearly = run_yearly_comparisons(df, log["date_column"])
 
     dashboard_path = os.path.join(out_dir, "dashboard.png")
-    chart_titles = build_dashboard(df, log.get("date_column"), forecasts, dashboard_path)
+    chart_titles = build_dashboard(df, log.get("date_column"), forecasts, yearly, dashboard_path)
 
     report_path_out = os.path.join(out_dir, "report.docx")
-    build_report(df, log, forecasts, chart_titles, dashboard_path, report_path_out)
+    build_report(df, log, forecasts, yearly, chart_titles, dashboard_path, report_path_out)
 
     return {
         "log": log,
