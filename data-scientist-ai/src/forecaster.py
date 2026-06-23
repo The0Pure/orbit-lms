@@ -13,6 +13,21 @@ ID_LIKE_PATTERNS = [
     "mac_address", "ip_address", "uuid", "guid", "hash",
 ]
 
+# Columns matching these patterns are "level" metrics (a snapshot value at a point in
+# time, like a price or rate) rather than "flow" metrics (an additive quantity over a
+# period, like revenue or units sold). Summing a level metric across a month produces
+# a number with no real-world meaning (e.g. summing 30 days of stock prices) — it
+# should be averaged instead.
+LEVEL_METRIC_PATTERNS = [
+    "price", "open", "close", "high", "low", "rate", "ratio", "percent", "pct",
+    "avg", "average", "index", "score", "balance", "margin", "yield",
+]
+
+
+def _is_level_metric(col_name: str) -> bool:
+    name = col_name.lower()
+    return any(p in name for p in LEVEL_METRIC_PATTERNS)
+
 
 def find_metric_columns(df: pd.DataFrame, max_metrics: int = MAX_AUTO_METRICS) -> dict:
     """Pick numeric columns worth forecasting: skip ID-like columns and pick the
@@ -138,7 +153,12 @@ def run_forecasts(df: pd.DataFrame, date_col: str, periods: int = 30) -> dict:
 
 def yearly_comparison(df: pd.DataFrame, date_col: str, value_col: str, years_ahead: int = 1) -> dict:
     """Forecast far enough ahead to cover `years_ahead` future years, then compare this year's
-    actual monthly totals against each of those future years' forecasted monthly totals."""
+    actual monthly figures against each of those future years' forecasted monthly figures.
+
+    For "level" metrics (prices, rates — see LEVEL_METRIC_PATTERNS) the monthly figure is an
+    average, since summing daily price snapshots into a "monthly total" has no real meaning.
+    For additive "flow" metrics (revenue, units sold, etc.) it's a sum, as before.
+    """
     last_date = df[date_col].dropna().max()
     this_year = last_date.year
     last_future_year = this_year + years_ahead
@@ -150,17 +170,25 @@ def yearly_comparison(df: pd.DataFrame, date_col: str, value_col: str, years_ahe
     combined["year"] = combined["date"].dt.year
     combined["month"] = combined["date"].dt.month
 
+    is_level = _is_level_metric(value_col)
+    agg = "mean" if is_level else "sum"
+
     def monthly_totals(year):
-        return combined[combined["year"] == year].groupby("month")["value"].sum().reindex(range(1, 13), fill_value=0)
+        return (
+            combined[combined["year"] == year]
+            .groupby("month")["value"]
+            .agg(agg)
+            .reindex(range(1, 13), fill_value=0)
+        )
 
     this_year_monthly = monthly_totals(this_year)
-    this_year_total = this_year_monthly.sum()
+    this_year_total = this_year_monthly.mean() if is_level else this_year_monthly.sum()
 
     years = []
     for offset in range(1, years_ahead + 1):
         year = this_year + offset
         year_monthly = monthly_totals(year)
-        year_total = year_monthly.sum()
+        year_total = year_monthly.mean() if is_level else year_monthly.sum()
         pct_change = ((year_total - this_year_total) / this_year_total * 100) if this_year_total else 0
         years.append({
             "year": year,
@@ -175,6 +203,7 @@ def yearly_comparison(df: pd.DataFrame, date_col: str, value_col: str, years_ahe
         "this_year_total": this_year_total,
         "years": years,
         "source": source,
+        "is_level_metric": is_level,
         # Back-compat aliases for the immediate next year (years_ahead == 1 is the common case).
         "next_year": years[0]["year"],
         "next_year_monthly": years[0]["monthly"],

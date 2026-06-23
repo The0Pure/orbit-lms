@@ -195,9 +195,10 @@ def build_report(
         last_year = comp["years"][-1]["year"]
         direction = "ahead of" if comp["years"][-1]["pct_change"] >= 0 else "behind"
         years_word = "year" if len(comp["years"]) == 1 else f"{len(comp['years'])} years"
+        figure_word = "monthly averages" if comp.get("is_level_metric") else "monthly totals"
         doc.add_paragraph(
             f"{label} — {comp['this_year']} vs {last_year}: side-by-side bars compare this year's "
-            f"actual monthly totals (blue) against each of the next {years_word}' projected totals "
+            f"actual {figure_word} (blue) against each of the next {years_word}' projected {figure_word} "
             f"(orange shades), so you can see at a glance which months are expected to run "
             f"{direction} this year's pace.",
             style="List Bullet",
@@ -245,9 +246,15 @@ def build_report(
     _heading(doc, "4. Year-over-Year Outlook")
     if yearly:
         max_years = max(len(comp["years"]) for comp in yearly.values())
+        any_level = any(comp.get("is_level_metric") for comp in yearly.values())
+        all_level = all(comp.get("is_level_metric") for comp in yearly.values())
+        figures_word = "averages" if all_level else ("totals/averages (mixed)" if any_level else "totals")
         doc.add_paragraph(
-            "The table below compares this year's totals against the projection for each "
-            f"of the next {max_years} year(s), for each key metric, assuming current trends continue."
+            f"The table below compares this year's {figures_word} against the projection for each "
+            f"of the next {max_years} year(s), for each key metric, assuming current trends continue. "
+            "Price-like metrics (e.g. open/close/high/low) are compared as monthly averages, since "
+            "summing daily price snapshots would not be meaningful; other metrics are compared as "
+            "monthly totals."
         )
         headers = ["Metric", "This Year"] + [
             f"+{i} Year (Forecast)" if i > 1 else "Next Year (Forecast)" for i in range(1, max_years + 1)
