@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Data Scientist AI — standalone program (independent of Orbit LMS).
+Data Scientist AI — standalone program for analyzing and forecasting any dataset.
 
 Run:
     python server.py
@@ -50,7 +50,7 @@ async def process(
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(400, f"Unsupported file type '{suffix}'. Use CSV or Excel.")
 
-    work_dir = Path(tempfile.mkdtemp(prefix="orbit_ds_"))
+    work_dir = Path(tempfile.mkdtemp(prefix="ds_ai_"))
     background_tasks.add_task(shutil.rmtree, work_dir, ignore_errors=True)
 
     input_path = work_dir / f"input{suffix}"
@@ -63,7 +63,7 @@ async def process(
     except Exception as exc:
         raise HTTPException(422, f"Failed to process report: {exc}") from exc
 
-    zip_path = work_dir / "orbit_data_scientist_results.zip"
+    zip_path = work_dir / "data_scientist_ai_results.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.write(out_dir / "dashboard.png", "dashboard.png")
         zf.write(out_dir / "report.docx", "report.docx")
@@ -71,7 +71,7 @@ async def process(
     return FileResponse(
         zip_path,
         media_type="application/zip",
-        filename="orbit_data_scientist_results.zip",
+        filename="data_scientist_ai_results.zip",
         background=background_tasks,
     )
 

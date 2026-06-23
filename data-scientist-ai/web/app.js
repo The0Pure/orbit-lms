@@ -76,7 +76,7 @@ processBtn.addEventListener("click", async () => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "orbit_data_scientist_results.zip";
+    a.download = "data_scientist_ai_results.zip";
     document.body.appendChild(a);
     a.click();
     a.remove();

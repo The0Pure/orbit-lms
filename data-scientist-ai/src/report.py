@@ -23,7 +23,7 @@ def build_report(
 ):
     doc = Document()
 
-    title = doc.add_heading("Orbit LMS — Data Science Report", level=0)
+    title = doc.add_heading("Data Scientist AI — Report", level=0)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     sub = doc.add_paragraph(f"Generated on {date.today().isoformat()}")
     sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -59,14 +59,13 @@ def build_report(
             avg_forecast = forecast_rows["value"].mean()
             trend = "increase" if avg_forecast > last_actual else "decrease"
             doc.add_paragraph(
-                f"{metric.capitalize()} (column '{payload['column']}'): the model projects an average "
+                f"{metric.replace('_',' ').title()} (column '{payload['column']}'): the model projects an average "
                 f"{trend} over the next {len(forecast_rows)} days, from a last observed daily value of "
                 f"{last_actual:.2f} to an average forecasted daily value of {avg_forecast:.2f}."
             )
     else:
         doc.add_paragraph(
-            "No forecastable metrics (enrollments, revenue, completion) with a usable date column "
-            "were found in this report."
+            "No forecastable numeric metrics with a usable date column were found in this report."
         )
 
     _heading(doc, "4. Year-over-Year Comparison")
@@ -74,7 +73,7 @@ def build_report(
         for metric, comp in yearly.items():
             direction = "growth" if comp["pct_change"] >= 0 else "decline"
             doc.add_paragraph(
-                f"{metric.capitalize()}: {comp['this_year']} total was {comp['this_year_total']:.2f}. "
+                f"{metric.replace('_',' ').title()}: {comp['this_year']} total was {comp['this_year_total']:.2f}. "
                 f"Based on current trends, {comp['next_year']} is projected to total "
                 f"{comp['next_year_total']:.2f} — a {abs(comp['pct_change']):.1f}% {direction} "
                 f"year-over-year."
@@ -91,7 +90,7 @@ def build_report(
         + (
             f"Forecasts were generated for: {', '.join(forecasts.keys())}."
             if forecasts
-            else "Add a date column and a metric such as enrollments, revenue or completion rate "
+            else "Add a date column and at least one numeric metric column "
             "to enable forecasting in future reports."
         )
     )

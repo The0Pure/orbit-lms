@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Orbit LMS Data Scientist AI
-----------------------------
-Cleans an LMS report, forecasts future metrics, builds a dashboard image,
+Data Scientist AI
+------------------
+Cleans any tabular report, forecasts future metrics, builds a dashboard image,
 and writes a Word report describing everything.
 
 Usage:
-    python main.py path/to/report.csv [--periods 30] [--out output]
+    python main.py path/to/data.csv [--periods 30] [--out output]
 """
 import argparse
 
@@ -14,8 +14,8 @@ from src.pipeline import run_pipeline
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Orbit LMS Data Scientist AI")
-    parser.add_argument("report_path", help="Path to a CSV or Excel LMS report")
+    parser = argparse.ArgumentParser(description="Data Scientist AI")
+    parser.add_argument("report_path", help="Path to a CSV or Excel file")
     parser.add_argument("--periods", type=int, default=30, help="Days ahead to forecast (default: 30)")
     parser.add_argument("--out", default="output", help="Output directory (default: ./output)")
     args = parser.parse_args()

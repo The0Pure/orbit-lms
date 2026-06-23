@@ -1,24 +1,27 @@
-"""Forecasting for LMS metrics: enrollments, revenue, completion rate."""
+"""Generic forecasting for any numeric metric in any dataset."""
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 
-METRIC_KEYWORDS = {
-    "enrollments": ["enroll"],
-    "revenue": ["revenue", "price", "payment", "amount", "income"],
-    "completion": ["complet", "progress", "score"],
-}
+MAX_AUTO_METRICS = 6
+ID_LIKE_PATTERNS = ["_id", "id_", "zip", "postal", "phone", "code"]
 
 
-def find_metric_columns(df: pd.DataFrame) -> dict:
-    found = {}
-    for metric, keywords in METRIC_KEYWORDS.items():
-        for col in df.columns:
-            if pd.api.types.is_numeric_dtype(df[col]) and any(k in col for k in keywords):
-                found[metric] = col
-                break
-    return found
+def find_metric_columns(df: pd.DataFrame, max_metrics: int = MAX_AUTO_METRICS) -> dict:
+    """Pick numeric columns worth forecasting: skip ID-like columns and pick the
+    ones with the most variation (most informative), up to max_metrics."""
+    candidates = []
+    for col in df.select_dtypes(include="number").columns:
+        name = col.lower()
+        if name == "id" or any(p in name for p in ID_LIKE_PATTERNS):
+            continue
+        if df[col].nunique() <= 1:
+            continue
+        candidates.append(col)
+
+    candidates.sort(key=lambda c: df[c].std() / (abs(df[c].mean()) + 1e-9), reverse=True)
+    return {col: col for col in candidates[:max_metrics]}
 
 
 def forecast_metric(df: pd.DataFrame, date_col: str, value_col: str, periods: int = 30) -> pd.DataFrame:
