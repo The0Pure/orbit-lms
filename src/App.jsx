@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "./context/AuthContext";
 import { useCourses } from "./context/CourseContext";
 import { supabase } from "./lib/supabase";
+import AdminDataScientist from "./components/AdminDataScientist";
 
 // ═══════════════════════════════════════════
 // BRAND COLORS
@@ -2715,6 +2716,7 @@ function AdminLayout({ user, logout, sec, setSec, courses, orders, addCourse, up
     {id:"careers",   icon:<I.Briefcase/>,l:"Careers"},
     {id:"discounts", icon:<I.Tag/>,       l:"Discounts"},
     {id:"revenue",   icon:<I.Dollar/>,    l:"Revenue"},
+    {id:"data-scientist", icon:<I.Chart/>, l:"Data Scientist AI"},
     {id:"settings",  icon:<I.Settings/>,l:"Settings"},
   ];
   return (
@@ -2740,6 +2742,7 @@ function AdminLayout({ user, logout, sec, setSec, courses, orders, addCourse, up
       {sec==="careers"     && <AdminCareers/>}
       {sec==="discounts"   && <AdminDiscounts/>}
       {sec==="revenue"     && <AdminRevenue orders={orders}/>}
+      {sec==="data-scientist" && <AdminDataScientist/>}
       {sec==="settings"    && <AdminSettings onSiteNameChange={onSiteNameChange}/>}
     </main>
   </div>

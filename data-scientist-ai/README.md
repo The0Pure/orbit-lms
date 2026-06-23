@@ -14,7 +14,7 @@ cd data-scientist-ai
 pip install -r requirements.txt
 ```
 
-## Usage
+## Usage (CLI)
 
 ```bash
 python main.py path/to/report.csv --periods 30 --out output
@@ -23,6 +23,23 @@ python main.py path/to/report.csv --periods 30 --out output
 - `report_path`: CSV or Excel file exported from Orbit LMS (e.g. enrollments, revenue, completion rate by date).
 - `--periods`: number of days to forecast ahead (default 30).
 - `--out`: output directory for `dashboard.png` and `report.docx` (default `output`).
+
+## Usage (Web UI)
+
+The Orbit LMS admin panel has a "Data Scientist AI" page where you can upload an Excel/CSV file
+and download the dashboard + Word report as a ZIP. To enable it, run the local API server:
+
+```bash
+cd data-scientist-ai
+pip install -r requirements.txt
+python server.py
+```
+
+This starts a server on `http://localhost:8000`. With it running, open the admin panel,
+go to **Data Scientist AI**, upload your file, and click **Process & Download**.
+
+By default the frontend calls `http://localhost:8000`. To point it elsewhere, set
+`VITE_DATA_SCIENTIST_API_URL` in the web app's `.env`.
 
 ## How metric detection works
 
