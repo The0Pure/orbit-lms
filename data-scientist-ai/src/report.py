@@ -178,12 +178,35 @@ def build_report(
     _heading(doc, "2. Dashboard")
     doc.add_paragraph(
         "The dashboard below gives a visual summary of how each key metric has performed and "
-        "where it is headed."
+        "where it is headed. Here's what each chart means in plain terms:"
     )
     doc.add_picture(dashboard_image, width=Inches(6.3))
-    doc.add_paragraph("Charts included:")
-    for t in chart_titles:
-        doc.add_paragraph(t, style="List Bullet")
+
+    for metric in forecasts:
+        label = _label(metric)
+        doc.add_paragraph(
+            f"{label} — Trend & Forecast: the solid blue line is what actually happened; the dashed "
+            f"orange line is where {label.lower()} is headed next if the recent trend continues. "
+            f"Think of the dashed segment as a short-term planning estimate, not a guarantee.",
+            style="List Bullet",
+        )
+    for metric, comp in yearly.items():
+        label = _label(metric)
+        direction = "ahead of" if comp["pct_change"] >= 0 else "behind"
+        doc.add_paragraph(
+            f"{label} — {comp['this_year']} vs {comp['next_year']}: side-by-side bars compare this "
+            f"year's actual monthly totals (blue) against next year's projected totals (orange), so "
+            f"you can see at a glance which months are expected to run {direction} this year's pace.",
+            style="List Bullet",
+        )
+    for t in chart_titles[len(forecasts) + len(yearly):]:
+        col = t.replace("Distribution of ", "")
+        doc.add_paragraph(
+            f"{col} — Distribution: this histogram shows how {col.lower()} values are spread across "
+            f"all records — where most of the activity is concentrated, and whether any unusual "
+            f"outliers stand out that are worth a closer look.",
+            style="List Bullet",
+        )
 
     # ── Performance & Forecast ──────────────────────────────
     _heading(doc, "3. Performance & Forecast")

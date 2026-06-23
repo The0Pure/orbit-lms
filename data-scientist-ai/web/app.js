@@ -57,12 +57,15 @@ processBtn.addEventListener("click", async () => {
   processBtn.disabled = true;
   processBtn.textContent = "Processing…";
 
-  const periods = Number(document.getElementById("periods").value) || 30;
+  const mode = document.getElementById("mode").value;
+  const horizonValue = Number(document.getElementById("horizonValue").value) || 2;
+  const horizonUnit = document.getElementById("horizonUnit").value;
+  const horizonParam = horizonUnit === "quarters" ? `quarters=${horizonValue}` : `periods=${horizonValue}`;
   const form = new FormData();
   form.append("file", selectedFile);
 
   try {
-    const res = await fetch(`${API_URL}/process?periods=${periods}`, {
+    const res = await fetch(`${API_URL}/process?mode=${mode}&${horizonParam}`, {
       method: "POST",
       body: form,
     });

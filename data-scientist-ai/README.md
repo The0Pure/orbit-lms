@@ -37,17 +37,26 @@ nothing is lost once the download finishes and you can revisit past runs at any 
 
 ```bash
 python main.py path/to/data.csv --periods 30 --out output
+python main.py path/to/data.csv --quarters 2 --mode predict   # next two quarters, forecast only
+python main.py path/to/data.csv --mode compare                # this year vs next year only
 ```
 
 - `report_path`: any CSV or Excel file.
 - `--periods`: number of days to forecast ahead (default 30).
+- `--quarters`: number of quarters ahead to forecast (1 quarter = 91 days). Overrides `--periods`.
+- `--mode`: `predict` (forward forecast only), `compare` (this year vs next year only), or `both` (default).
 - `--out`: output directory for `dashboard.png` and `report.docx` (default `output`).
 
 ## Usage — API
 
 ```bash
-curl -F "file=@data.csv" "http://localhost:8000/process?periods=30" -o results.zip
+curl -F "file=@data.csv" "http://localhost:8000/process?periods=30&mode=both" -o results.zip
+curl -F "file=@data.csv" "http://localhost:8000/process?quarters=2&mode=predict" -o results.zip
 ```
+
+- `mode`: `predict`, `compare`, or `both` (default `both`).
+- `quarters`: forecast horizon in quarters (overrides `periods` if set).
+- `periods`: forecast horizon in days (default 30, used if `quarters` is not set).
 
 ## How it picks what to analyze
 

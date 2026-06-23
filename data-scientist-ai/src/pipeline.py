@@ -6,8 +6,15 @@ from src.forecaster import run_forecasts, run_yearly_comparisons
 from src.dashboard import build_dashboard
 from src.report import build_report
 
+DAYS_PER_QUARTER = 91
 
-def run_pipeline(report_path: str, out_dir: str, periods: int = 30) -> dict:
+
+def run_pipeline(report_path: str, out_dir: str, periods: int = 30, mode: str = "both") -> dict:
+    """mode controls which forward-looking analysis to run:
+    - "predict": only the short-horizon forecast (`periods` days ahead)
+    - "compare": only the this-year-vs-next-year comparison
+    - "both": run both (default)
+    """
     os.makedirs(out_dir, exist_ok=True)
 
     raw_df = load_report(report_path)
@@ -16,8 +23,10 @@ def run_pipeline(report_path: str, out_dir: str, periods: int = 30) -> dict:
     forecasts = {}
     yearly = {}
     if log.get("date_column"):
-        forecasts = run_forecasts(df, log["date_column"], periods=periods)
-        yearly = run_yearly_comparisons(df, log["date_column"])
+        if mode in ("predict", "both"):
+            forecasts = run_forecasts(df, log["date_column"], periods=periods)
+        if mode in ("compare", "both"):
+            yearly = run_yearly_comparisons(df, log["date_column"])
 
     dashboard_path = os.path.join(out_dir, "dashboard.png")
     chart_titles = build_dashboard(df, log.get("date_column"), forecasts, yearly, dashboard_path)

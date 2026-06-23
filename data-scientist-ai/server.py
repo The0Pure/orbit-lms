@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.pipeline import run_pipeline
+from src.pipeline import DAYS_PER_QUARTER, run_pipeline
 
 WEB_DIR = Path(__file__).parent / "web"
 STORAGE_DIR = Path(__file__).parent / "storage"
@@ -52,11 +52,15 @@ def _safe_stem(filename: str) -> str:
 @app.post("/process")
 async def process(
     file: UploadFile = File(...),
-    periods: int = Query(30, ge=1, le=365),
+    periods: int = Query(30, ge=1, le=2000),
+    quarters: int | None = Query(None, ge=1, le=20, description="Overrides `periods` if set"),
+    mode: str = Query("both", pattern="^(predict|compare|both)$"),
 ):
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(400, f"Unsupported file type '{suffix}'. Use CSV or Excel.")
+
+    effective_periods = quarters * DAYS_PER_QUARTER if quarters else periods
 
     # Every upload is kept on disk under storage/, so past inputs and results
     # are never lost once the response is sent (unlike a tempdir that gets wiped).
@@ -70,7 +74,7 @@ async def process(
 
     out_dir = run_dir / "output"
     try:
-        run_pipeline(str(input_path), str(out_dir), periods=periods)
+        run_pipeline(str(input_path), str(out_dir), periods=effective_periods, mode=mode)
     except Exception as exc:
         raise HTTPException(422, f"Failed to process report: {exc}") from exc
 
