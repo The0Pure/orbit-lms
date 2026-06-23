@@ -87,19 +87,23 @@ def forecast_metric(
     engine actually produced the forecast, since TimesFM can silently fall back at runtime
     (e.g. no network access to download its checkpoint).
     """
-    raw_series = (
-        df[[date_col, value_col]]
-        .dropna()
-        .groupby(pd.Grouper(key=date_col, freq="D"))[value_col]
-        .sum()
-        .asfreq("D")  # leaves gaps as NaN rather than 0 — a day with no rows is "unknown", not "zero"
-    )
+    # Level metrics (prices, rates) are averaged per day; flow metrics (revenue, counts)
+    # are summed. Critically, plain `.sum()` returns 0 (not NaN) for a day with zero rows
+    # (e.g. a weekend with no trading) — `min_count=1` makes sum() return NaN for those
+    # too, matching mean()'s natural behavior, so a day with no data reads as "unknown"
+    # rather than silently becoming a fake zero that drags down trend/average calculations.
+    grouped = df[[date_col, value_col]].dropna().groupby(pd.Grouper(key=date_col, freq="D"))[value_col]
+    raw_series = (grouped.mean() if _is_level_metric(value_col) else grouped.sum(min_count=1)).asfreq("D")
 
     if len(raw_series) < 5:
         raise ValueError(f"Not enough time-series data to forecast '{value_col}' (need >= 5 days).")
 
-    # Zero-filled view for display and for the polynomial fallback (which can't handle NaN).
-    series = raw_series.fillna(0)
+    # Gap-filled view for display and for the polynomial fallback (which can't handle NaN).
+    # A flow metric (revenue, units) genuinely has zero activity on a day with no rows, so
+    # zero-filling is correct there. A level metric (price, rate) doesn't drop to zero when
+    # there's no data for a day (e.g. a weekend the market is closed) — it just holds its
+    # last known value, so gaps are forward-filled instead.
+    series = raw_series.ffill().fillna(0) if _is_level_metric(value_col) else raw_series.fillna(0)
 
     predictions = lower = upper = None
     source = "polynomial_regression"
