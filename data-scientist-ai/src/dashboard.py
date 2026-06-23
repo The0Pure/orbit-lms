@@ -12,8 +12,12 @@ PALETTE = {"actual": "#2563eb", "forecast": "#f97316", "bar": "#10b981", "accent
 MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 
-def _style_axis(ax, title):
+def _style_axis(ax, title, xlabel=None, ylabel=None):
     ax.set_title(title, fontsize=12, fontweight="bold", color="#1e293b")
+    if xlabel:
+        ax.set_xlabel(xlabel, fontsize=9, color="#475569")
+    if ylabel:
+        ax.set_ylabel(ylabel, fontsize=9, color="#475569")
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.grid(axis="y", alpha=0.3)
@@ -60,7 +64,10 @@ def build_dashboard(
         ax.legend(loc="upper left", fontsize=9, frameon=False)
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
         engine_label = "TimesFM" if payload.get("source") == "timesfm" else "Polynomial Regression"
-        _style_axis(ax, f"{metric.replace('_',' ').title()} — Trend & Forecast ({engine_label})")
+        _style_axis(
+            ax, f"{metric.replace('_',' ').title()} — Trend & Forecast ({engine_label})",
+            xlabel="Date", ylabel=metric.replace("_", " ").title(),
+        )
         chart_titles.append(
             f"{metric.replace('_',' ').title()} trend and {len(forecast)}-day forecast (via {engine_label})"
         )
@@ -93,7 +100,10 @@ def build_dashboard(
         ax.legend(loc="upper left", fontsize=8, frameon=False)
         last_year = comp["years"][-1]["year"]
         engine_label = "TimesFM" if comp.get("source") == "timesfm" else "Polynomial Regression"
-        _style_axis(ax, f"{metric.replace('_',' ').title()} — {comp['this_year']} vs {last_year} ({engine_label})")
+        _style_axis(
+            ax, f"{metric.replace('_',' ').title()} — {comp['this_year']} vs {last_year} ({engine_label})",
+            xlabel="Month", ylabel=metric.replace("_", " ").title(),
+        )
         chart_titles.append(
             f"{metric.replace('_',' ').title()}: {comp['this_year']} vs {last_year} forecast "
             f"({comp['years'][-1]['pct_change']:+.1f}%, via {engine_label})"
@@ -105,7 +115,10 @@ def build_dashboard(
             break
         ax = axes[idx]
         ax.hist(df[col].dropna(), bins=20, color=PALETTE["bar"], edgecolor="white")
-        _style_axis(ax, f"Distribution of {col.replace('_', ' ').title()}")
+        _style_axis(
+            ax, f"Distribution of {col.replace('_', ' ').title()}",
+            xlabel=col.replace("_", " ").title(), ylabel="Count",
+        )
         chart_titles.append(f"Distribution of {col.replace('_', ' ').title()}")
         idx += 1
 

@@ -96,9 +96,12 @@ def forecast_metric(
             # days, which skews the model's read of the trend).
             predictions = timesfm_forecaster.forecast(raw_series.values, periods)
             source = "timesfm"
-        except Exception:
+        except Exception as exc:
             # Model install is present but couldn't load (e.g. no network access to
-            # download the checkpoint from Hugging Face) — fall back below.
+            # download the checkpoint from Hugging Face) — fall back below, but tell
+            # the user why instead of silently switching engines.
+            print(f"[forecaster] TimesFM is installed but failed to run for '{value_col}': "
+                  f"{exc}. Falling back to polynomial regression.")
             predictions = None
     if predictions is None:
         predictions = _forecast_polynomial(series, periods, degree)
