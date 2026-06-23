@@ -54,21 +54,28 @@ def forecast_metric(
     handles trend/seasonality without the long-horizon blowup polynomial regression suffers from.
     Falls back to polynomial regression (see `_forecast_polynomial`) if TimesFM/torch aren't installed.
     """
-    series = (
+    raw_series = (
         df[[date_col, value_col]]
         .dropna()
         .groupby(pd.Grouper(key=date_col, freq="D"))[value_col]
         .sum()
-        .asfreq("D", fill_value=0)
+        .asfreq("D")  # leaves gaps as NaN rather than 0 — a day with no rows is "unknown", not "zero"
     )
 
-    if len(series) < 5:
+    if len(raw_series) < 5:
         raise ValueError(f"Not enough time-series data to forecast '{value_col}' (need >= 5 days).")
+
+    # Zero-filled view for display and for the polynomial fallback (which can't handle NaN).
+    series = raw_series.fillna(0)
 
     predictions = None
     if timesfm_forecaster.is_available():
         try:
-            predictions = timesfm_forecaster.forecast(series.values, periods)
+            # Pass the NaN-gapped series: TimesFM linearly interpolates internal gaps and strips
+            # leading NaNs itself, which represents missing data far better than treating gaps as
+            # literal zeros (zero-filling makes sparse/non-daily data look like real zero-activity
+            # days, which skews the model's read of the trend).
+            predictions = timesfm_forecaster.forecast(raw_series.values, periods)
         except Exception:
             # Model install is present but couldn't load (e.g. no network access to
             # download the checkpoint from Hugging Face) — fall back below.
