@@ -105,6 +105,16 @@ def build_dashboard(
         chart_titles.append(f"Distribution of {col.replace('_', ' ').title()}")
         idx += 1
 
+    if idx == 0:
+        axes[0].text(
+            0.5, 0.5,
+            "No numeric columns suitable for charting were found in this dataset\n"
+            "(after excluding ID-like and identifier columns).",
+            ha="center", va="center", fontsize=12, color="#64748b", wrap=True,
+        )
+        axes[0].axis("off")
+        idx = 1
+
     for j in range(idx, len(axes)):
         axes[j].axis("off")
 
