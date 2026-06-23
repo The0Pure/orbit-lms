@@ -60,6 +60,11 @@ def build_dashboard(
         ax.plot(actual["date"], actual["value"], color=PALETTE["actual"], label="Actual", linewidth=2)
         ax.plot(forecast["date"], forecast["value"], color=PALETTE["forecast"], label="Forecast",
                 linewidth=2, linestyle="--")
+        if "lower" in forecast and (forecast["upper"] > forecast["lower"]).any():
+            ax.fill_between(
+                forecast["date"], forecast["lower"], forecast["upper"],
+                color=PALETTE["forecast"], alpha=0.15, label="Uncertainty range",
+            )
         ax.axvline(actual["date"].iloc[-1], color="#94a3b8", linestyle=":", linewidth=1)
         ax.legend(loc="upper left", fontsize=9, frameon=False)
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))

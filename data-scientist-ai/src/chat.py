@@ -53,12 +53,17 @@ def build_context(df, log: dict, forecasts: dict, yearly: dict) -> dict:
     for metric, payload in forecasts.items():
         data = payload["data"]
         actual = data[data["type"] == "actual"]["value"]
-        forecast = data[data["type"] == "forecast"]["value"]
+        forecast_rows = data[data["type"] == "forecast"]
+        forecast = forecast_rows["value"]
         forecast_summary[metric] = {
             "recent_actual_avg": round(float(actual.tail(min(7, len(actual))).mean()), 4),
             "forecast_avg": round(float(forecast.mean()), 4),
             "forecast_horizon_days": int(len(forecast)),
             "source": payload.get("source", "unknown"),
+            "uncertainty_range_avg": {
+                "lower": round(float(forecast_rows["lower"].mean()), 4),
+                "upper": round(float(forecast_rows["upper"].mean()), 4),
+            },
         }
 
     yearly_summary = {

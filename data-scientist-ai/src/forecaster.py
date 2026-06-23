@@ -86,15 +86,18 @@ def forecast_metric(
     # Zero-filled view for display and for the polynomial fallback (which can't handle NaN).
     series = raw_series.fillna(0)
 
-    predictions = None
+    predictions = lower = upper = None
     source = "polynomial_regression"
     if timesfm_forecaster.is_available():
         try:
             # Pass the NaN-gapped series: TimesFM linearly interpolates internal gaps and strips
             # leading NaNs itself, which represents missing data far better than treating gaps as
             # literal zeros (zero-filling makes sparse/non-daily data look like real zero-activity
-            # days, which skews the model's read of the trend).
-            predictions = timesfm_forecaster.forecast(raw_series.values, periods)
+            # days, which skews the model's read of the trend). Also pass the dates so TimesFM-XReg
+            # can use day-of-week/month as covariates, and keep its quantile output as an
+            # uncertainty band instead of throwing it away.
+            result = timesfm_forecaster.forecast(raw_series.values, periods, history_dates=raw_series.index)
+            predictions, lower, upper = result["point"], result["lower"], result["upper"]
             source = "timesfm"
         except Exception as exc:
             # Model install is present but couldn't load (e.g. no network access to
@@ -105,12 +108,19 @@ def forecast_metric(
             predictions = None
     if predictions is None:
         predictions = _forecast_polynomial(series, periods, degree)
+        lower = upper = predictions
         source = "polynomial_regression"
 
     future_dates = pd.date_range(series.index[-1] + pd.Timedelta(days=1), periods=periods, freq="D")
 
-    history = pd.DataFrame({"date": series.index, "value": series.values, "type": "actual"})
-    forecast = pd.DataFrame({"date": future_dates, "value": predictions, "type": "forecast"})
+    history = pd.DataFrame({
+        "date": series.index, "value": series.values, "type": "actual",
+        "lower": series.values, "upper": series.values,
+    })
+    forecast = pd.DataFrame({
+        "date": future_dates, "value": predictions, "type": "forecast",
+        "lower": lower, "upper": upper,
+    })
     return pd.concat([history, forecast], ignore_index=True), source
 
 

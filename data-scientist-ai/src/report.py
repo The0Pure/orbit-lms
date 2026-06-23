@@ -224,10 +224,16 @@ def build_report(
             change_pct = ((avg_forecast - recent_actual) / recent_actual * 100) if recent_actual else 0
             trend = _trend_word(change_pct)
             engine_label = "Google TimesFM" if payload.get("source") == "timesfm" else "polynomial regression"
+            band_note = ""
+            if payload.get("source") == "timesfm":
+                avg_lower = forecast_rows["lower"].mean()
+                avg_upper = forecast_rows["upper"].mean()
+                if avg_upper > avg_lower:
+                    band_note = f", with a model-estimated uncertainty range of {avg_lower:,.1f} to {avg_upper:,.1f}"
             doc.add_paragraph(
                 f"{label}: based on recent history, {label.lower()} is showing {trend} over the "
                 f"next {len(forecast_rows)} days, moving from a recent average level of "
-                f"{recent_actual:,.1f} toward a projected average of {avg_forecast:,.1f} "
+                f"{recent_actual:,.1f} toward a projected average of {avg_forecast:,.1f}{band_note} "
                 f"(forecast generated using {engine_label})."
             )
     else:
