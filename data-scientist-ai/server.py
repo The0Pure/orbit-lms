@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Local API server for the Orbit LMS Data Scientist AI.
+Data Scientist AI — standalone program (independent of Orbit LMS).
 
 Run:
     python server.py
 
-Then POST a CSV/Excel file to http://localhost:8000/process
-and receive a ZIP containing dashboard.png + report.docx.
+Then open http://localhost:8000 in your browser to use the upload UI,
+or POST a CSV/Excel file directly to http://localhost:8000/process
+to receive a ZIP containing dashboard.png + report.docx.
 """
 import shutil
 import tempfile
@@ -16,10 +17,13 @@ from pathlib import Path
 from fastapi import BackgroundTasks, FastAPI, UploadFile, File, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from src.pipeline import run_pipeline
 
-app = FastAPI(title="Orbit LMS Data Scientist AI")
+WEB_DIR = Path(__file__).parent / "web"
+
+app = FastAPI(title="Data Scientist AI")
 
 app.add_middleware(
     CORSMiddleware,
@@ -70,6 +74,9 @@ async def process(
         filename="orbit_data_scientist_results.zip",
         background=background_tasks,
     )
+
+
+app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
 
 
 if __name__ == "__main__":
