@@ -36,7 +36,16 @@ def main():
              "'both' for both (default: both)",
     )
     parser.add_argument("--out", default="output", help="Output directory (default: ./output)")
+    parser.add_argument(
+        "--finetune-dir", default=None,
+        help="Use a TimesFM checkpoint fine-tuned on your data (see finetune_timesfm.py) "
+             "instead of the stock pretrained model",
+    )
     args = parser.parse_args()
+
+    if args.finetune_dir:
+        from src import timesfm_forecaster
+        timesfm_forecaster.use_finetuned(args.finetune_dir)
 
     if args.weeks:
         periods = args.weeks * 7

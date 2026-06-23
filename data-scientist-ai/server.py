@@ -93,10 +93,17 @@ async def process(
     years: int | None = Query(None, ge=1, le=10),
     mode: str = Query("both", pattern="^(predict|compare|both)$"),
     table: str | None = Query(None, description="Table name, if uploading a SQLite database"),
+    finetune_dir: str | None = Query(
+        None, description="Path to a TimesFM checkpoint fine-tuned on your data (see finetune_timesfm.py)"
+    ),
 ):
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(400, f"Unsupported file type '{suffix}'. Use CSV, Excel, or SQLite.")
+
+    if finetune_dir:
+        from src import timesfm_forecaster
+        timesfm_forecaster.use_finetuned(finetune_dir)
 
     effective_periods = _resolve_periods(periods, weeks, months, quarters, years)
 

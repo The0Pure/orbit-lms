@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 
 _model = None
+_checkpoint = "google/timesfm-2.5-200m-pytorch"
 _MAX_CONTEXT = 1024
 _MAX_HORIZON = 256
 
@@ -34,6 +35,16 @@ def is_available() -> bool:
         return False
 
 
+def use_finetuned(checkpoint_dir: str | None) -> None:
+    """Point the forecaster at a locally fine-tuned checkpoint (see
+    `src/timesfm_finetune.py`), or back at the public pretrained model if
+    `checkpoint_dir` is None. Drops the cached model so the next call to
+    `_get_model()` loads the new one."""
+    global _checkpoint, _model
+    _checkpoint = checkpoint_dir or "google/timesfm-2.5-200m-pytorch"
+    _model = None
+
+
 def _get_model():
     global _model
     if _model is not None:
@@ -43,7 +54,7 @@ def _get_model():
     import timesfm
 
     torch.set_float32_matmul_precision("high")
-    model = timesfm.TimesFM_2p5_200M_torch.from_pretrained("google/timesfm-2.5-200m-pytorch")
+    model = timesfm.TimesFM_2p5_200M_torch.from_pretrained(_checkpoint)
     model.compile(
         timesfm.ForecastConfig(
             max_context=_MAX_CONTEXT,
