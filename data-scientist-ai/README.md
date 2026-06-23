@@ -29,6 +29,10 @@ python server.py
 Then open **http://localhost:8000** in your browser. Upload any Excel/CSV file, set the forecast
 horizon, click **Process & Download**, and you'll get a ZIP with `dashboard.png` and `report.docx`.
 
+Every upload is also saved locally under `data-scientist-ai/storage/<timestamp>_<filename>/`,
+alongside its generated `output/dashboard.png`, `output/report.docx`, and `results.zip` — so
+nothing is lost once the download finishes and you can revisit past runs at any time.
+
 ## Usage — CLI
 
 ```bash
