@@ -58,12 +58,14 @@ def build_context(df, log: dict, forecasts: dict, yearly: dict) -> dict:
             "recent_actual_avg": round(float(actual.tail(min(7, len(actual))).mean()), 4),
             "forecast_avg": round(float(forecast.mean()), 4),
             "forecast_horizon_days": int(len(forecast)),
+            "source": payload.get("source", "unknown"),
         }
 
     yearly_summary = {
         metric: {
             "this_year": comp["this_year"],
             "this_year_total": round(float(comp["this_year_total"]), 4),
+            "source": comp.get("source", "unknown"),
             "forecast_years": [
                 {
                     "year": y["year"],

@@ -61,12 +61,16 @@ def _forecast_polynomial(series: pd.Series, periods: int, degree: int) -> np.nda
 
 def forecast_metric(
     df: pd.DataFrame, date_col: str, value_col: str, periods: int = 30, degree: int = 2
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, str]:
     """Aggregate value_col by day and forecast `periods` days ahead.
 
     Uses Google's TimesFM foundation model (zero-shot, pretrained) when available, since it
     handles trend/seasonality without the long-horizon blowup polynomial regression suffers from.
     Falls back to polynomial regression (see `_forecast_polynomial`) if TimesFM/torch aren't installed.
+
+    Returns (data, source) where source is "timesfm" or "polynomial_regression" — labeling which
+    engine actually produced the forecast, since TimesFM can silently fall back at runtime
+    (e.g. no network access to download its checkpoint).
     """
     raw_series = (
         df[[date_col, value_col]]
@@ -83,6 +87,7 @@ def forecast_metric(
     series = raw_series.fillna(0)
 
     predictions = None
+    source = "polynomial_regression"
     if timesfm_forecaster.is_available():
         try:
             # Pass the NaN-gapped series: TimesFM linearly interpolates internal gaps and strips
@@ -90,18 +95,20 @@ def forecast_metric(
             # literal zeros (zero-filling makes sparse/non-daily data look like real zero-activity
             # days, which skews the model's read of the trend).
             predictions = timesfm_forecaster.forecast(raw_series.values, periods)
+            source = "timesfm"
         except Exception:
             # Model install is present but couldn't load (e.g. no network access to
             # download the checkpoint from Hugging Face) — fall back below.
             predictions = None
     if predictions is None:
         predictions = _forecast_polynomial(series, periods, degree)
+        source = "polynomial_regression"
 
     future_dates = pd.date_range(series.index[-1] + pd.Timedelta(days=1), periods=periods, freq="D")
 
     history = pd.DataFrame({"date": series.index, "value": series.values, "type": "actual"})
     forecast = pd.DataFrame({"date": future_dates, "value": predictions, "type": "forecast"})
-    return pd.concat([history, forecast], ignore_index=True)
+    return pd.concat([history, forecast], ignore_index=True), source
 
 
 def run_forecasts(df: pd.DataFrame, date_col: str, periods: int = 30) -> dict:
@@ -109,7 +116,8 @@ def run_forecasts(df: pd.DataFrame, date_col: str, periods: int = 30) -> dict:
     results = {}
     for metric, col in metrics.items():
         try:
-            results[metric] = {"column": col, "data": forecast_metric(df, date_col, col, periods)}
+            data, source = forecast_metric(df, date_col, col, periods)
+            results[metric] = {"column": col, "data": data, "source": source}
         except ValueError:
             continue
     return results
@@ -125,7 +133,7 @@ def yearly_comparison(df: pd.DataFrame, date_col: str, value_col: str, years_ahe
     days_to_cover = (pd.Timestamp(f"{last_future_year}-12-31") - last_date).days
     periods = max(days_to_cover, 30)
 
-    combined = forecast_metric(df, date_col, value_col, periods=periods, degree=1)
+    combined, source = forecast_metric(df, date_col, value_col, periods=periods, degree=1)
     combined["year"] = combined["date"].dt.year
     combined["month"] = combined["date"].dt.month
 
@@ -153,6 +161,7 @@ def yearly_comparison(df: pd.DataFrame, date_col: str, value_col: str, years_ahe
         "this_year_monthly": this_year_monthly,
         "this_year_total": this_year_total,
         "years": years,
+        "source": source,
         # Back-compat aliases for the immediate next year (years_ahead == 1 is the common case).
         "next_year": years[0]["year"],
         "next_year_monthly": years[0]["monthly"],

@@ -223,10 +223,12 @@ def build_report(
             avg_forecast = forecast_rows["value"].mean()
             change_pct = ((avg_forecast - recent_actual) / recent_actual * 100) if recent_actual else 0
             trend = _trend_word(change_pct)
+            engine_label = "Google TimesFM" if payload.get("source") == "timesfm" else "polynomial regression"
             doc.add_paragraph(
                 f"{label}: based on recent history, {label.lower()} is showing {trend} over the "
                 f"next {len(forecast_rows)} days, moving from a recent average level of "
-                f"{recent_actual:,.1f} toward a projected average of {avg_forecast:,.1f}."
+                f"{recent_actual:,.1f} toward a projected average of {avg_forecast:,.1f} "
+                f"(forecast generated using {engine_label})."
             )
     else:
         doc.add_paragraph(
@@ -244,6 +246,11 @@ def build_report(
         headers = ["Metric", "This Year"] + [
             f"+{i} Year (Forecast)" if i > 1 else "Next Year (Forecast)" for i in range(1, max_years + 1)
         ]
+        engines_used = {comp.get("source", "polynomial_regression") for comp in yearly.values()}
+        engine_note = "Google TimesFM" if engines_used == {"timesfm"} else (
+            "polynomial regression" if engines_used == {"polynomial_regression"} else "TimesFM/polynomial regression (mixed)"
+        )
+        doc.add_paragraph(f"Forecasts in this table were generated using {engine_note}.")
         yoy_rows = []
         for metric, comp in yearly.items():
             row = [_label(metric), f"{comp['this_year_total']:,.1f}"]

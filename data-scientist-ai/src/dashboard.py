@@ -59,8 +59,11 @@ def build_dashboard(
         ax.axvline(actual["date"].iloc[-1], color="#94a3b8", linestyle=":", linewidth=1)
         ax.legend(loc="upper left", fontsize=9, frameon=False)
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
-        _style_axis(ax, f"{metric.replace('_',' ').title()} — Trend & Forecast")
-        chart_titles.append(f"{metric.replace('_',' ').title()} trend and {len(forecast)}-day forecast")
+        engine_label = "TimesFM" if payload.get("source") == "timesfm" else "Polynomial Regression"
+        _style_axis(ax, f"{metric.replace('_',' ').title()} — Trend & Forecast ({engine_label})")
+        chart_titles.append(
+            f"{metric.replace('_',' ').title()} trend and {len(forecast)}-day forecast (via {engine_label})"
+        )
         idx += 1
 
     for metric, comp in yearly.items():
@@ -89,10 +92,11 @@ def build_dashboard(
         ax.set_xticklabels(MONTH_LABELS, fontsize=8)
         ax.legend(loc="upper left", fontsize=8, frameon=False)
         last_year = comp["years"][-1]["year"]
-        _style_axis(ax, f"{metric.replace('_',' ').title()} — {comp['this_year']} vs {last_year}")
+        engine_label = "TimesFM" if comp.get("source") == "timesfm" else "Polynomial Regression"
+        _style_axis(ax, f"{metric.replace('_',' ').title()} — {comp['this_year']} vs {last_year} ({engine_label})")
         chart_titles.append(
             f"{metric.replace('_',' ').title()}: {comp['this_year']} vs {last_year} forecast "
-            f"({comp['years'][-1]['pct_change']:+.1f}%)"
+            f"({comp['years'][-1]['pct_change']:+.1f}%, via {engine_label})"
         )
         idx += 1
 

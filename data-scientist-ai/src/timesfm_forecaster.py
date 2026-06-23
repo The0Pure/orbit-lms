@@ -50,6 +50,28 @@ def _get_model():
     return _model
 
 
+def check_install() -> tuple[bool, str]:
+    """Verify TimesFM is installed AND can actually load/run, not just importable.
+
+    Returns (ok, message). A real forecast call is the only way to know the checkpoint
+    downloaded correctly and inference works end-to-end — import success alone doesn't
+    guarantee that.
+    """
+    if not is_available():
+        return False, "timesfm/torch are not installed. Run `pip install timesfm[torch]`."
+
+    try:
+        sample = np.array([float(i) for i in range(60)])
+        result = forecast(sample, periods=5)
+    except Exception as exc:  # noqa: BLE001 - surfacing any failure reason to the user
+        return False, f"timesfm/torch are installed, but the model failed to load/run: {exc}"
+
+    if result.shape != (5,):
+        return False, f"Model ran but returned an unexpected shape: {result.shape}"
+
+    return True, "TimesFM is installed and working — a real forecast call succeeded."
+
+
 def forecast(history: np.ndarray, periods: int) -> np.ndarray:
     """Forecast `periods` steps ahead from `history` (a 1-D array of daily values).
 
