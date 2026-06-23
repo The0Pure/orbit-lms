@@ -7,7 +7,11 @@ from sklearn.preprocessing import PolynomialFeatures
 from src import timesfm_forecaster
 
 MAX_AUTO_METRICS = 6
-ID_LIKE_PATTERNS = ["_id", "id_", "zip", "postal", "phone", "code"]
+ID_LIKE_PATTERNS = [
+    "_id", "id_", "zip", "postal", "phone", "code", "msisdn", "imsi", "imei",
+    "iccid", "msid", "mdn", "ssn", "account_no", "account_number", "serial",
+    "mac_address", "ip_address", "uuid", "guid", "hash",
+]
 
 
 def find_metric_columns(df: pd.DataFrame, max_metrics: int = MAX_AUTO_METRICS) -> dict:
@@ -19,6 +23,16 @@ def find_metric_columns(df: pd.DataFrame, max_metrics: int = MAX_AUTO_METRICS) -
         if name == "id" or any(p in name for p in ID_LIKE_PATTERNS):
             continue
         if df[col].nunique() <= 1:
+            continue
+        # Catch unnamed identifier columns too: a near-unique integer column with a huge
+        # magnitude (e.g. an 10-15 digit phone/account number) is almost never a real metric,
+        # whereas business metrics like revenue/counts repeat values and stay in a normal range.
+        is_high_cardinality_id = (
+            pd.api.types.is_integer_dtype(df[col])
+            and df[col].nunique() / len(df) > 0.95
+            and abs(df[col].mean()) > 1e6
+        )
+        if is_high_cardinality_id:
             continue
         candidates.append(col)
 
